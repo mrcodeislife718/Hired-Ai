@@ -1,36 +1,42 @@
 # Hired AI
 
-An autonomous job acquisition agent that turns verified engineering evidence into targeted opportunities, human introductions, interviews, and offers.
+Hired AI is a governed, evidence-grounded autonomous job acquisition system designed to turn verified engineering evidence into targeted opportunities, human introductions, interviews, and offers.
 
-Hired AI is designed as a governed, evidence-grounded job-search operating system. It discovers opportunities, filters and scores them, matches requirements to verified portfolio evidence, prepares truthful application/outreach packages, tracks the hiring funnel, learns from outcomes, and requires explicit approval before any external submission or identity-bearing communication.
+## Current capabilities
 
-## Core workflow
+- multi-agent opportunity discovery, qualification, evidence matching, scoring, outreach preparation, application preparation, interview preparation, follow-up, and funnel learning
+- explicit Governor approval boundary for identity-bearing actions
+- durable state with PostgreSQL when `DATABASE_URL` is configured, otherwise atomic local JSON checkpoints
+- GitHub portfolio indexing for repository-backed evidence
+- Greenhouse, Lever, and authorized JSON discovery adapters
+- salary parsing and annual normalization utilities
+- API-key protection for `/api/*`
+- bounded retries, circuit breakers, and trace recording
+- conservative resume-text ingestion
+- due-follow-up calculation
+- NYC-oriented command-center dashboard
+- deterministic tests and Node 22/24 CI configuration
 
-`DISCOVERED -> QUALIFIED -> CONTACTED -> APPLIED -> RECRUITER_SCREEN -> TECHNICAL -> ONSITE -> OFFER | REJECTED`
+## Run
 
-## Architecture
+```bash
+npm install
+npm run check
+npm run serve
+```
 
-- Scout Agent: opportunity discovery and normalization
-- Qualification Agent: hard constraints, fit analysis, and opportunity scoring
-- Evidence Agent: verified skill/project evidence graph
-- Company Intelligence Agent: company/team/context research
-- Recruiter Agent: legitimate human-path discovery
-- Resume Agent: truthful job-specific resume tailoring
-- Outreach Agent: personalized outreach drafts
-- Application Agent: application package assembly
-- Follow-Up Agent: deterministic follow-up scheduling
-- Interview Agent: role-specific preparation plans
-- Career Strategist: funnel analytics and learning
-- Governor: approval, authority, safety, deduplication, and audit enforcement
+Optional environment:
 
-## 8-node operating model
+```bash
+HIRED_API_KEY=...
+DATABASE_URL=postgres://...
+GITHUB_OWNER=...
+GITHUB_TOKEN=...
+GREENHOUSE_BOARDS=...
+LEVER_COMPANIES=...
+JOB_JSON_FEEDS=...
+```
 
-Input -> Process -> Output -> Feedback -> Incentives -> Bottlenecks -> Dependencies -> Failure Points
+The system intentionally separates preparation, approval, and execution. It is built to maximize quality interviews and offers rather than application volume.
 
-## Safety model
-
-Hired AI optimizes for quality interviews and offers, not application volume. It does not fabricate qualifications, auto-submit applications, or send messages under the candidate's identity without explicit approval.
-
-## Status
-
-Initial production-oriented implementation in progress.
+See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/OPERATIONS.md`.
