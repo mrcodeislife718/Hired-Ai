@@ -1,15 +1,3 @@
 import type { ApprovalRequest, AuditEvent, Evidence, FeedbackEvent, Opportunity } from './domain.js';
-
-export class Store {
-  opportunities = new Map<string, Opportunity>();
-  evidence = new Map<string, Evidence>();
-  approvals = new Map<string, ApprovalRequest>();
-  audit: AuditEvent[] = [];
-  feedback: FeedbackEvent[] = [];
-
-  saveOpportunity(value: Opportunity) { this.opportunities.set(value.id, value); return value; }
-  saveEvidence(value: Evidence) { this.evidence.set(value.id, value); return value; }
-  addAudit(value: AuditEvent) { this.audit.push(value); return value; }
-  addFeedback(value: FeedbackEvent) { this.feedback.push(value); return value; }
-  saveApproval(value: ApprovalRequest) { this.approvals.set(value.id, value); return value; }
-}
+import type { StoreSnapshot } from './persistence.js';
+export class Store { opportunities=new Map<string,Opportunity>();evidence=new Map<string,Evidence>();approvals=new Map<string,ApprovalRequest>();audit:AuditEvent[]=[];feedback:FeedbackEvent[]=[];constructor(snapshot?:StoreSnapshot){if(snapshot)this.restore(snapshot);}restore(snapshot:StoreSnapshot){this.opportunities=new Map(snapshot.opportunities.map(v=>[v.id,v]));this.evidence=new Map(snapshot.evidence.map(v=>[v.id,v]));this.approvals=new Map(snapshot.approvals.map(v=>[v.id,v]));this.audit=[...snapshot.audit];this.feedback=[...snapshot.feedback];}snapshot():StoreSnapshot{return{opportunities:[...this.opportunities.values()],evidence:[...this.evidence.values()],approvals:[...this.approvals.values()],audit:[...this.audit],feedback:[...this.feedback]};}saveOpportunity(value:Opportunity){this.opportunities.set(value.id,value);return value;}saveEvidence(value:Evidence){this.evidence.set(value.id,value);return value;}addAudit(value:AuditEvent){this.audit.push(value);return value;}addFeedback(value:FeedbackEvent){this.feedback.push(value);return value;}saveApproval(value:ApprovalRequest){this.approvals.set(value.id,value);return value;} }

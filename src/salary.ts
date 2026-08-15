@@ -1,0 +1,4 @@
+export interface SalaryInput { min?:number; max?:number; period?:'hour'|'day'|'month'|'year'; currency?:string; }
+const annualMultiplier={hour:2080,day:260,month:12,year:1} as const;
+export function normalizeAnnualSalary(input:SalaryInput){const period=input.period??'year',m=annualMultiplier[period];return{currency:input.currency??'USD',min:input.min===undefined?undefined:Math.round(input.min*m),max:input.max===undefined?undefined:Math.round(input.max*m),period:'year' as const};}
+export function parseSalary(text:string){const cleaned=text.replace(/,/g,'');const match=cleaned.match(/\$\s*(\d+(?:\.\d+)?)\s*(k)?(?:\s*[-–]\s*\$?\s*(\d+(?:\.\d+)?)\s*(k)?)?/i);if(!match)return{};const scale=(n:string,k?:string)=>Number(n)*(k?1000:1);return{min:scale(match[1],match[2]),max:match[3]?scale(match[3],match[4]):undefined};}

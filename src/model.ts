@@ -1,0 +1,5 @@
+export interface ModelRequest { system:string; input:string; schemaName:string; }
+export interface ModelProvider { completeJson(request:ModelRequest):Promise<unknown>; }
+export class NoopModelProvider implements ModelProvider { async completeJson(){ throw new Error('model provider not configured'); } }
+export class HttpJsonModelProvider implements ModelProvider { constructor(private readonly endpoint:string,private readonly apiKey?:string){} async completeJson(request:ModelRequest){const response=await fetch(this.endpoint,{method:'POST',headers:{'content-type':'application/json',...(this.apiKey?{authorization:`Bearer ${this.apiKey}`}:{})},body:JSON.stringify(request)});if(!response.ok)throw new Error(`model provider ${response.status}`);return response.json();} }
+export function requireObject(value:unknown,required:string[]):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('malformed model output');const obj=value as Record<string,unknown>;for(const key of required)if(!(key in obj))throw new Error(`malformed model output: missing ${key}`);return obj;}
