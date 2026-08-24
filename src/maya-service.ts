@@ -15,7 +15,10 @@ export interface MayaResponse extends Record<string, unknown> {
 }
 
 function ranked(engine: HiredEngine) {
-  return engine.selectiveOpportunities(60).sort((a, b) => b.opportunity.score.total - a.opportunity.score.total);
+  return engine.selectiveOpportunities(60)
+    .map(decision => ({ ...decision, opportunity: engine.store.opportunities.get(decision.opportunityId) }))
+    .filter(item => Boolean(item.opportunity))
+    .sort((a, b) => b.opportunityScore - a.opportunityScore);
 }
 
 function findOpportunity(engine: HiredEngine, message: string, explicitId?: string) {
@@ -36,7 +39,7 @@ export function deterministicMayaReply(engine: HiredEngine, input: MayaRequest):
   if (input.resumeText) {
     const plan = engine.auditCareer(input.resumeText.slice(0, 200_000), socials);
     return {
-      message: plan.resume.likelyOutdated
+      message: plan.resume.parsed.likelyOutdated
         ? 'Your resume is behind your current career evidence. I compared it with your verified work, professional presence, and current opportunities and built a modernization plan.'
         : 'Your resume appears reasonably current. I still compared it with your verified evidence and strongest opportunities so we can strengthen anything that is underselling you.',
       type: 'career-audit',
