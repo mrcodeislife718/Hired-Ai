@@ -16,6 +16,12 @@ export class BillingEventLedger {
     return this.poolPromise ??= import('pg').then(({ Pool }) => new Pool({ connectionString: this.connectionString, max: 2 }));
   }
 
+  private async migrate() {
+    if (!this.connectionString) return;
+    const pool = await this.pool();
+    await pool.query('create table if not exists hired_billing_events (event_id text primary key, processed_at timestamptz not null default now())');
+  }
+
   private async load() {
     if (this.loaded || this.connectionString) { this.loaded = true; return; }
     try {
@@ -27,22 +33,39 @@ export class BillingEventLedger {
     this.loaded = true;
   }
 
+  private async saveFile() {
+    await mkdir(dirname(this.jsonPath), { recursive: true });
+    const tmp = `${this.jsonPath}.${process.pid}.tmp`;
+    await writeFile(tmp, JSON.stringify([...this.events]), 'utf8');
+    await rename(tmp, this.jsonPath);
+  }
+
   async claim(eventId: string) {
     if (!eventId) throw new Error('billing event id required');
     if (this.connectionString) {
+      await this.migrate();
       const pool = await this.pool();
-      await pool.query('create table if not exists hired_billing_events (event_id text primary key, processed_at timestamptz not null default now())');
       const result = await pool.query('insert into hired_billing_events(event_id) values($1) on conflict do nothing returning event_id', [eventId]);
       return result.rowCount === 1;
     }
     await this.load();
     if (this.events.has(eventId)) return false;
     this.events.add(eventId);
-    await mkdir(dirname(this.jsonPath), { recursive: true });
-    const tmp = `${this.jsonPath}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify([...this.events]), 'utf8');
-    await rename(tmp, this.jsonPath);
+    await this.saveFile();
     return true;
+  }
+
+  async release(eventId: string) {
+    if (!eventId) return;
+    if (this.connectionString) {
+      await this.migrate();
+      const pool = await this.pool();
+      await pool.query('delete from hired_billing_events where event_id=$1', [eventId]);
+      return;
+    }
+    await this.load();
+    if (!this.events.delete(eventId)) return;
+    await this.saveFile();
   }
 
   async close() { if (this.poolPromise) await (await this.poolPromise).end(); }
