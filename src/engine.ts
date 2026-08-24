@@ -22,11 +22,13 @@ export class HiredEngine {
   readonly followup = new FollowUpAgent();
   readonly interview = new InterviewAgent();
   readonly strategist = new CareerStrategist();
-  readonly careerOS: CareerOperatingSystem;
 
   constructor(readonly profile: CandidateProfile, evidence: Evidence[] = []) {
     evidence.forEach(e => this.store.saveEvidence(e));
-    this.careerOS = new CareerOperatingSystem(profile, evidence);
+  }
+
+  private careerOS() {
+    return new CareerOperatingSystem(this.profile, [...this.store.evidence.values()]);
   }
 
   ingest(raw: RawJob): Opportunity {
@@ -57,15 +59,15 @@ export class HiredEngine {
   }
 
   auditCareer(resumeText: string, socialPlatforms: string[] = ['linkedin']) {
-    return this.careerOS.buildPlan(resumeText, [...this.store.opportunities.values()], socialPlatforms);
+    return this.careerOS().buildPlan(resumeText, [...this.store.opportunities.values()], socialPlatforms);
   }
 
   selectiveOpportunities(minimumOpportunityScore = 70) {
-    return this.careerOS.selectOpportunities([...this.store.opportunities.values()], minimumOpportunityScore);
+    return this.careerOS().selectOpportunities([...this.store.opportunities.values()], minimumOpportunityScore);
   }
 
   networkPlan(socialPlatforms: string[] = ['linkedin']) {
-    return this.careerOS.buildNetworkPlan([...this.store.opportunities.values()], socialPlatforms);
+    return this.careerOS().buildNetworkPlan([...this.store.opportunities.values()], socialPlatforms);
   }
 
   package(opportunityId: string) {
@@ -93,11 +95,17 @@ export class HiredEngine {
   recordFeedback(event: FeedbackEvent) {
     this.store.addFeedback(event);
     this.governor.audit('CareerStrategist', 'FEEDBACK_RECORDED', event.opportunityId, { kind: event.kind });
-    const mapping: Partial<Record<FeedbackEvent['kind'], Parameters<Governor['transition']>[1]>> = { REJECTED: 'REJECTED', RECRUITER_SCREEN: 'RECRUITER_SCREEN', TECHNICAL_PASS: 'TECHNICAL', ONSITE: 'ONSITE', OFFER: 'OFFER' };
+    const mapping: Partial<Record<FeedbackEvent['kind'], Parameters<Governor['transition']>[1]>> = {
+      REJECTED: 'REJECTED',
+      RECRUITER_SCREEN: 'RECRUITER_SCREEN',
+      TECHNICAL_PASS: 'TECHNICAL',
+      ONSITE: 'ONSITE',
+      OFFER: 'OFFER'
+    };
     const next = mapping[event.kind];
     if (next) {
       const opp = this.requiredOpportunity(event.opportunityId);
-      if (opp.state !== next) this.governor.transition(opportunityIdOr(event), next);
+      if (opp.state !== next) this.governor.transition(event.opportunityId, next);
     }
     return this.strategist.analyze(this.store.feedback);
   }
@@ -105,7 +113,7 @@ export class HiredEngine {
   careerStatus() {
     const items = [...this.store.opportunities.values()].sort((a,b) => b.score.total - a.score.total);
     const counts = items.reduce<Record<string, number>>((a,o) => (a[o.state] = (a[o.state] ?? 0) + 1, a), {});
-    const decisions = this.careerOS.selectOpportunities(items);
+    const decisions = this.careerOS().selectOpportunities(items);
     return {
       counts,
       priority: decisions.filter(d => d.decision === 'pursue').slice(0, 10),
@@ -120,8 +128,4 @@ export class HiredEngine {
     if (!value) throw new Error('opportunity not found');
     return value;
   }
-}
-
-function opportunityIdOr(event: FeedbackEvent) {
-  return event.opportunityId;
 }
