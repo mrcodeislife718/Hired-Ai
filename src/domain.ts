@@ -24,6 +24,34 @@ export interface CandidateProfile {
   constraints: CandidateConstraints;
 }
 
+export interface CareerPreferences {
+  targetTitles: string[];
+  targetIndustries: string[];
+  targetCompensation?: { min?: number; target?: number; currency?: string };
+  preferredCompanyStages?: string[];
+  preferredTeamSizes?: string[];
+  preferredManagementStyles?: string[];
+  preferredWorkModes?: WorkMode[];
+  autonomyPreference?: 'high' | 'balanced' | 'structured';
+  pacePreference?: 'fast' | 'balanced' | 'steady';
+  riskTolerance?: 'low' | 'medium' | 'high';
+  values?: string[];
+}
+
+export interface CareerIntelligence {
+  candidateId: string;
+  aspirations: string[];
+  preferences: CareerPreferences;
+  demonstratedSkills: string[];
+  claimedSkills: string[];
+  evidenceCoverage: Record<string, number>;
+  recurringGaps: string[];
+  compensationHistory?: number[];
+  currentTrajectory?: string;
+  targetTrajectory?: string;
+  updatedAt: string;
+}
+
 export interface RawJob {
   source: string;
   sourceId: string;
@@ -79,6 +107,22 @@ export interface HumanPath {
   source: string;
 }
 
+export interface RelationshipRecord {
+  id: string;
+  name?: string;
+  role?: string;
+  company?: string;
+  relationshipType: 'recruiter' | 'hiring-manager' | 'peer' | 'mentor' | 'founder' | 'former-colleague' | 'community' | 'referral' | 'other';
+  channels: HumanPath['channel'][];
+  publicUrls: string[];
+  source: string;
+  confidence: number;
+  interactionCount: number;
+  lastInteractionAt?: string;
+  nextFollowUpAt?: string;
+  notes?: string[];
+}
+
 export interface JobIntelligence {
   normalizedRequirements: string[];
   likelyInterviewAreas: string[];
@@ -99,6 +143,34 @@ export interface Opportunity {
   humanPaths: HumanPath[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DevelopmentAction {
+  skill: string;
+  reason: string;
+  recommendedEvidence: 'project' | 'credential' | 'work-sample' | 'interview-practice' | 'network-proof' | 'other';
+  estimatedImpact: 'low' | 'medium' | 'high';
+  priority: number;
+}
+
+export interface CareerDevelopmentPlan {
+  candidateId: string;
+  actions: DevelopmentAction[];
+  generatedAt: string;
+}
+
+export interface OutcomeMetrics {
+  applications: number;
+  recruiterScreens: number;
+  technicalInterviews: number;
+  onsites: number;
+  offers: number;
+  noResponses: number;
+  rejections: number;
+  applicationToScreenRate: number;
+  screenToTechnicalRate: number;
+  technicalToOnsiteRate: number;
+  onsiteToOfferRate: number;
 }
 
 export interface ApprovalRequest {
