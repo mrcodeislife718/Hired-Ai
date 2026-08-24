@@ -1,4 +1,4 @@
-import type { CandidateProfile, Evidence, HumanPath, JobIntelligence, RawJob, SkillGap } from './domain.js';
+import type { CandidateProfile, CareerDevelopmentPlan, CareerIntelligence, Evidence, FeedbackEvent, HumanPath, JobIntelligence, OutcomeMetrics, RawJob, RelationshipRecord, SkillGap } from './domain.js';
 import { normalize, unique } from './utils.js';
 
 export class ScoutAgent {
@@ -49,9 +49,55 @@ export class EvidenceAgent {
   }
 }
 
+export class CareerIntelligenceAgent {
+  build(profile: CandidateProfile, evidence: Evidence[], recurringGaps: string[] = []): CareerIntelligence {
+    const coverage = evidence.reduce<Record<string, number>>((acc, item) => {
+      acc[item.skill] = Math.max(acc[item.skill] ?? 0, item.strength);
+      return acc;
+    }, {});
+    return {
+      candidateId: profile.id,
+      aspirations: profile.constraints.preferredTitles,
+      preferences: {
+        targetTitles: profile.constraints.preferredTitles,
+        targetIndustries: [],
+        targetCompensation: profile.constraints.minBaseSalary ? { min: profile.constraints.minBaseSalary, currency: 'USD' } : undefined,
+        preferredWorkModes: profile.constraints.allowedWorkModes,
+        values: []
+      },
+      demonstratedSkills: unique(evidence.map(e => e.skill)),
+      claimedSkills: unique(profile.skills),
+      evidenceCoverage: coverage,
+      recurringGaps: unique(recurringGaps),
+      updatedAt: new Date().toISOString()
+    };
+  }
+}
+
 export class RecruiterAgent {
   derivePublicPaths(job: RawJob): HumanPath[] {
     return [{ role: 'Hiring team', channel: 'company-site', publicUrl: job.url, confidence: 0.75, source: job.source }];
+  }
+}
+
+export class RelationshipIntelligenceAgent {
+  fromHumanPaths(paths: HumanPath[], company?: string): RelationshipRecord[] {
+    return paths.map((path, index) => ({
+      id: `rel_${normalize(company ?? 'company').replace(/\s+/g, '_')}_${index}`,
+      name: path.name,
+      role: path.role,
+      company,
+      relationshipType: /recruit/i.test(path.role) ? 'recruiter' : /hiring/i.test(path.role) ? 'hiring-manager' : 'other',
+      channels: [path.channel],
+      publicUrls: path.publicUrl ? [path.publicUrl] : [],
+      source: path.source,
+      confidence: path.confidence,
+      interactionCount: 0
+    }));
+  }
+
+  prioritize(records: RelationshipRecord[]): RelationshipRecord[] {
+    return [...records].sort((a,b) => (b.confidence - a.confidence) || (a.interactionCount - b.interactionCount));
   }
 }
 
@@ -96,11 +142,62 @@ export class InterviewAgent {
   }
 }
 
-export class CareerStrategist {
-  analyze(feedback: { kind: string }[]) {
+export class CareerDevelopmentAgent {
+  plan(candidateId: string, gaps: SkillGap[]): CareerDevelopmentPlan {
+    const actions = gaps
+      .filter(g => g.strength !== 'strong')
+      .map((g, index) => ({
+        skill: g.skill,
+        reason: g.explanation,
+        recommendedEvidence: g.strength === 'missing' ? 'project' as const : 'work-sample' as const,
+        estimatedImpact: g.strength === 'missing' ? 'high' as const : 'medium' as const,
+        priority: index + 1
+      }));
+    return { candidateId, actions, generatedAt: new Date().toISOString() };
+  }
+}
+
+export class OutcomeLearningAgent {
+  summarize(feedback: FeedbackEvent[]): OutcomeMetrics {
     const counts = feedback.reduce<Record<string, number>>((acc, item) => (acc[item.kind] = (acc[item.kind] ?? 0) + 1, acc), {});
-    const screens = counts.RECRUITER_SCREEN ?? 0;
+    const applications = new Set(feedback.map(f => f.opportunityId)).size;
+    const recruiterScreens = counts.RECRUITER_SCREEN ?? 0;
+    const technicalInterviews = counts.TECHNICAL_PASS ?? 0;
+    const onsites = counts.ONSITE ?? 0;
     const offers = counts.OFFER ?? 0;
-    return { counts, objective: 'maximize quality interviews and offers, not application volume', signal: offers ? 'offer-conversion-observed' : screens ? 'screen-conversion-observed' : 'collect-more-outcome-data' };
+    const rate = (num:number, den:number) => den ? num / den : 0;
+    return {
+      applications,
+      recruiterScreens,
+      technicalInterviews,
+      onsites,
+      offers,
+      noResponses: counts.NO_RESPONSE ?? 0,
+      rejections: counts.REJECTED ?? 0,
+      applicationToScreenRate: rate(recruiterScreens, applications),
+      screenToTechnicalRate: rate(technicalInterviews, recruiterScreens),
+      technicalToOnsiteRate: rate(onsites, technicalInterviews),
+      onsiteToOfferRate: rate(offers, onsites)
+    };
+  }
+}
+
+export class CareerStrategist {
+  private readonly outcomeLearning = new OutcomeLearningAgent();
+  analyze(feedback: FeedbackEvent[]) {
+    const metrics = this.outcomeLearning.summarize(feedback);
+    return {
+      counts: {
+        NO_RESPONSE: metrics.noResponses,
+        REJECTED: metrics.rejections,
+        RECRUITER_SCREEN: metrics.recruiterScreens,
+        TECHNICAL_PASS: metrics.technicalInterviews,
+        ONSITE: metrics.onsites,
+        OFFER: metrics.offers
+      },
+      metrics,
+      objective: 'maximize durable career outcomes, qualified interviews, offers, compensation, and relationship value—not application volume',
+      signal: metrics.offers ? 'offer-conversion-observed' : metrics.recruiterScreens ? 'screen-conversion-observed' : 'collect-more-outcome-data'
+    };
   }
 }
