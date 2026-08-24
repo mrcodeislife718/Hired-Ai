@@ -1,9 +1,21 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ApprovalRequest, AuditEvent, Evidence, FeedbackEvent, Opportunity } from './domain.js';
 
-export interface StoreSnapshot { opportunities: Opportunity[]; evidence: Evidence[]; approvals: ApprovalRequest[]; audit: AuditEvent[]; feedback: FeedbackEvent[]; }
-export interface PersistenceAdapter { load(): Promise<StoreSnapshot | undefined>; save(snapshot: StoreSnapshot): Promise<void>; close?(): Promise<void>; }
+export interface StoreSnapshot {
+  opportunities: Opportunity[];
+  evidence: Evidence[];
+  approvals: ApprovalRequest[];
+  audit: AuditEvent[];
+  feedback: FeedbackEvent[];
+}
+
+export interface PersistenceAdapter {
+  load(): Promise<StoreSnapshot | undefined>;
+  save(snapshot: StoreSnapshot): Promise<void>;
+  delete?(): Promise<void>;
+  close?(): Promise<void>;
+}
 
 const safeKey = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128) || 'primary';
 
@@ -23,6 +35,7 @@ export class JsonFilePersistence implements PersistenceAdapter {
     await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf8');
     await rename(tmp, this.path);
   }
+  async delete() { await rm(this.path, { force: true }); }
 }
 
 export class PostgresPersistence implements PersistenceAdapter {
@@ -45,6 +58,11 @@ export class PostgresPersistence implements PersistenceAdapter {
     await this.migrate();
     const pool = await this.pool();
     await pool.query('insert into hired_state(id,payload,updated_at) values($1,$2,now()) on conflict(id) do update set payload=excluded.payload, updated_at=now()', [this.stateId, snapshot]);
+  }
+  async delete() {
+    await this.migrate();
+    const pool = await this.pool();
+    await pool.query('delete from hired_state where id=$1', [this.stateId]);
   }
   async close() { if (this.poolPromise) await (await this.poolPromise).end(); }
 }
