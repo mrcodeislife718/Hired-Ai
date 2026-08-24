@@ -1,5 +1,6 @@
 import type { CandidateProfile, Evidence, FeedbackEvent, Opportunity, RawJob } from './domain.js';
 import { ApplicationAgent, CareerPresenceAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, RoleReadinessAgent, ScoutAgent } from './agents.js';
+import { CareerOperatingSystem } from './career-os.js';
 import { Governor } from './governor.js';
 import { scoreOpportunity } from './scoring.js';
 import { Store } from './store.js';
@@ -21,8 +22,12 @@ export class HiredEngine {
   readonly followup = new FollowUpAgent();
   readonly interview = new InterviewAgent();
   readonly strategist = new CareerStrategist();
+  readonly careerOS: CareerOperatingSystem;
 
-  constructor(readonly profile: CandidateProfile, evidence: Evidence[] = []) { evidence.forEach(e => this.store.saveEvidence(e)); }
+  constructor(readonly profile: CandidateProfile, evidence: Evidence[] = []) {
+    evidence.forEach(e => this.store.saveEvidence(e));
+    this.careerOS = new CareerOperatingSystem(profile, evidence);
+  }
 
   ingest(raw: RawJob): Opportunity {
     const job = this.scout.normalize(raw);
@@ -51,6 +56,18 @@ export class HiredEngine {
     return this.careerPresence.build(this.profile.id, [...this.store.evidence.values()], socialPlatforms);
   }
 
+  auditCareer(resumeText: string, socialPlatforms: string[] = ['linkedin']) {
+    return this.careerOS.buildPlan(resumeText, [...this.store.opportunities.values()], socialPlatforms);
+  }
+
+  selectiveOpportunities(minimumOpportunityScore = 70) {
+    return this.careerOS.selectOpportunities([...this.store.opportunities.values()], minimumOpportunityScore);
+  }
+
+  networkPlan(socialPlatforms: string[] = ['linkedin']) {
+    return this.careerOS.buildNetworkPlan([...this.store.opportunities.values()], socialPlatforms);
+  }
+
   package(opportunityId: string) {
     const opp = this.requiredOpportunity(opportunityId);
     const evidence = opp.evidenceIds.map(id => this.store.evidence.get(id)).filter((x): x is Evidence => Boolean(x));
@@ -62,7 +79,11 @@ export class HiredEngine {
     return { opportunity: opp, readiness, resume, outreach, application, interview };
   }
 
-  requestOutreach(opportunityId: string) { const p = this.package(opportunityId); return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths }); }
+  requestOutreach(opportunityId: string) {
+    const p = this.package(opportunityId);
+    return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths });
+  }
+
   requestApplication(opportunityId: string) {
     const p = this.package(opportunityId);
     if (!p.readiness.canOccupyRole) throw new Error(`role readiness gate blocked application: ${p.readiness.blockingGaps.join(', ') || 'insufficient demonstrated readiness'}`);
@@ -73,15 +94,34 @@ export class HiredEngine {
     this.store.addFeedback(event);
     this.governor.audit('CareerStrategist', 'FEEDBACK_RECORDED', event.opportunityId, { kind: event.kind });
     const mapping: Partial<Record<FeedbackEvent['kind'], Parameters<Governor['transition']>[1]>> = { REJECTED: 'REJECTED', RECRUITER_SCREEN: 'RECRUITER_SCREEN', TECHNICAL_PASS: 'TECHNICAL', ONSITE: 'ONSITE', OFFER: 'OFFER' };
-    const next = mapping[event.kind]; if (next) { const opp = this.requiredOpportunity(event.opportunityId); if (opp.state !== next) this.governor.transition(event.opportunityId, next); }
+    const next = mapping[event.kind];
+    if (next) {
+      const opp = this.requiredOpportunity(event.opportunityId);
+      if (opp.state !== next) this.governor.transition(opportunityIdOr(event), next);
+    }
     return this.strategist.analyze(this.store.feedback);
   }
 
   careerStatus() {
     const items = [...this.store.opportunities.values()].sort((a,b) => b.score.total - a.score.total);
     const counts = items.reduce<Record<string, number>>((a,o) => (a[o.state] = (a[o.state] ?? 0) + 1, a), {});
-    return { counts, priority: items.filter(o => !o.hardRejected).slice(0, 10), pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'), funnelLearning: this.strategist.analyze(this.store.feedback) };
+    const decisions = this.careerOS.selectOpportunities(items);
+    return {
+      counts,
+      priority: decisions.filter(d => d.decision === 'pursue').slice(0, 10),
+      developmentCandidates: decisions.filter(d => d.decision === 'develop-first').slice(0, 10),
+      pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'),
+      funnelLearning: this.strategist.analyze(this.store.feedback)
+    };
   }
 
-  private requiredOpportunity(id: string) { const value = this.store.opportunities.get(id); if (!value) throw new Error('opportunity not found'); return value; }
+  private requiredOpportunity(id: string) {
+    const value = this.store.opportunities.get(id);
+    if (!value) throw new Error('opportunity not found');
+    return value;
+  }
+}
+
+function opportunityIdOr(event: FeedbackEvent) {
+  return event.opportunityId;
 }
