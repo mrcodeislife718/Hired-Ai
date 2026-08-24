@@ -45,7 +45,7 @@ export class CommercialPlatform {
     return { discovered: discovery.jobs.length, ingested, duplicates, rejected, failures: discovery.failures };
   }
 
-  async indexGitHubFor(account: AccountRecord, owner: string, token = process.env.GITHUB_TOKEN) {
+  async indexGitHubFor(account: AccountRecord, owner: string, token?: string) {
     const runtime = await this.runtimeFor(account);
     const indexer = new GitHubPortfolioIndexer(owner, token);
     const indexed = await indexer.index();
