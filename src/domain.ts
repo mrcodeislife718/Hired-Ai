@@ -52,6 +52,25 @@ export interface CareerIntelligence {
   updatedAt: string;
 }
 
+export interface CareerPresenceProfile {
+  candidateId: string;
+  github?: {
+    profileUrl?: string;
+    strongestRepositories: string[];
+    evidenceGaps: string[];
+    presentationIssues: string[];
+  };
+  socialProfiles: Array<{
+    platform: string;
+    profileUrl?: string;
+    positioning?: string;
+    targetAudience?: string[];
+    networkGoals?: string[];
+    improvementActions?: string[];
+  }>;
+  updatedAt: string;
+}
+
 export interface RawJob {
   source: string;
   sourceId: string;
@@ -143,6 +162,17 @@ export interface Opportunity {
   humanPaths: HumanPath[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RoleReadinessAssessment {
+  opportunityId: string;
+  canOccupyRole: boolean;
+  readinessScore: number;
+  strongCapabilities: string[];
+  adjacentCapabilities: string[];
+  blockingGaps: string[];
+  operationalRisk: 'low' | 'medium' | 'high';
+  rationale: string[];
 }
 
 export interface DevelopmentAction {
