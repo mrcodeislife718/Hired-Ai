@@ -1,4 +1,4 @@
-import type { CandidateProfile, CareerDevelopmentPlan, CareerIntelligence, Evidence, FeedbackEvent, HumanPath, JobIntelligence, OutcomeMetrics, RawJob, RelationshipRecord, SkillGap } from './domain.js';
+import type { CandidateProfile, CareerDevelopmentPlan, CareerIntelligence, CareerPresenceProfile, Evidence, FeedbackEvent, HumanPath, JobIntelligence, OutcomeMetrics, RawJob, RelationshipRecord, RoleReadinessAssessment, SkillGap } from './domain.js';
 import { normalize, unique } from './utils.js';
 
 export class ScoutAgent {
@@ -49,6 +49,34 @@ export class EvidenceAgent {
   }
 }
 
+export class RoleReadinessAgent {
+  assess(opportunityId: string, gaps: SkillGap[]): RoleReadinessAssessment {
+    const strong = gaps.filter(g => g.strength === 'strong').map(g => g.skill);
+    const adjacent = gaps.filter(g => g.strength === 'adjacent' || g.strength === 'learning-gap').map(g => g.skill);
+    const blocking = gaps.filter(g => g.strength === 'missing').map(g => g.skill);
+    const total = Math.max(gaps.length, 1);
+    const weighted = strong.length + adjacent.length * 0.5;
+    const readinessScore = Math.round((weighted / total) * 100);
+    const canOccupyRole = blocking.length === 0 && readinessScore >= 70;
+    const operationalRisk = blocking.length >= Math.max(2, Math.ceil(total * 0.34)) ? 'high' as const : blocking.length ? 'medium' as const : 'low' as const;
+    return {
+      opportunityId,
+      canOccupyRole,
+      readinessScore,
+      strongCapabilities: strong,
+      adjacentCapabilities: adjacent,
+      blockingGaps: blocking,
+      operationalRisk,
+      rationale: [
+        `${strong.length} requirement(s) have direct evidence.`,
+        `${adjacent.length} requirement(s) have adjacent or developing evidence.`,
+        `${blocking.length} requirement(s) currently lack verified evidence.`,
+        canOccupyRole ? 'Current evidence supports selective pursuit.' : 'Do not auto-pursue until blocking gaps are resolved or manually reviewed.'
+      ]
+    };
+  }
+}
+
 export class CareerIntelligenceAgent {
   build(profile: CandidateProfile, evidence: Evidence[], recurringGaps: string[] = []): CareerIntelligence {
     const coverage = evidence.reduce<Record<string, number>>((acc, item) => {
@@ -69,6 +97,28 @@ export class CareerIntelligenceAgent {
       claimedSkills: unique(profile.skills),
       evidenceCoverage: coverage,
       recurringGaps: unique(recurringGaps),
+      updatedAt: new Date().toISOString()
+    };
+  }
+}
+
+export class CareerPresenceAgent {
+  build(candidateId: string, evidence: Evidence[], socialPlatforms: string[] = ['linkedin']): CareerPresenceProfile {
+    const repos = unique(evidence.map(e => e.repository)).filter(Boolean);
+    const lowEvidence = evidence.filter(e => e.strength < 0.7).map(e => e.skill);
+    return {
+      candidateId,
+      github: {
+        strongestRepositories: repos.slice(0, 8),
+        evidenceGaps: unique(lowEvidence),
+        presentationIssues: []
+      },
+      socialProfiles: socialPlatforms.map(platform => ({
+        platform,
+        targetAudience: ['recruiters','hiring managers','peers','founders','mentors'],
+        networkGoals: ['increase relevant connections','demonstrate credible expertise','create warm career paths'],
+        improvementActions: ['align positioning with target roles','publish proof-backed work','engage relevant people before requesting connection']
+      })),
       updatedAt: new Date().toISOString()
     };
   }
@@ -137,7 +187,12 @@ export class InterviewAgent {
       role: `${job.title} @ ${job.company}`,
       study: intelligence.likelyInterviewAreas,
       gapDrills: gaps.filter(g => g.strength !== 'strong').map(g => ({ skill: g.skill, objective: `Explain truthful current level, adjacent proof, and a concrete ramp plan for ${g.skill}.` })),
-      systemDesignPrompt: `Design a reliable system relevant to ${job.company}'s ${job.title} role and defend tradeoffs, bottlenecks, dependencies, and failure points.`
+      systemDesignPrompt: `Design a reliable system relevant to ${job.company}'s ${job.title} role and defend tradeoffs, bottlenecks, dependencies, and failure points.`,
+      mockInterviewPlan: {
+        behavioral: ['Tell me about a difficult problem you solved.','Describe a failure and what you changed afterward.'],
+        technical: intelligence.likelyInterviewAreas,
+        truthfulGapHandling: gaps.filter(g => g.strength !== 'strong').map(g => `Practice a precise answer for ${g.skill} without overstating experience.`)
+      }
     };
   }
 }
