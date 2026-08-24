@@ -54,6 +54,24 @@ export class CommercialPlatform {
     return { owner, evidenceAdded: indexed.length, evidence: indexed };
   }
 
+  async exportAccount(account: AccountRecord) {
+    const runtime = await this.runtimeFor(account);
+    return {
+      exportedAt: new Date().toISOString(),
+      account: this.accounts.publicAccount(account),
+      careerState: runtime.engine.store.snapshot()
+    };
+  }
+
+  async purgeAccount(account: AccountRecord) {
+    const runtime = this.runtimes.get(account.id) ?? await this.runtimeFor(account);
+    runtime.stopAutoCheckpoint();
+    await runtime.persistence.delete?.();
+    await runtime.persistence.close?.();
+    this.runtimes.delete(account.id);
+    await this.accounts.deleteAccount(account.id);
+  }
+
   async close() {
     for (const runtime of this.runtimes.values()) await runtime.close();
     this.runtimes.clear();
