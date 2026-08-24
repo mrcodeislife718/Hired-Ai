@@ -1,5 +1,5 @@
 import type { CandidateProfile, Evidence, FeedbackEvent, Opportunity, RawJob } from './domain.js';
-import { ApplicationAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, ScoutAgent } from './agents.js';
+import { ApplicationAgent, CareerPresenceAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, RoleReadinessAgent, ScoutAgent } from './agents.js';
 import { Governor } from './governor.js';
 import { scoreOpportunity } from './scoring.js';
 import { Store } from './store.js';
@@ -12,6 +12,8 @@ export class HiredEngine {
   readonly qualification = new QualificationAgent();
   readonly intelligence = new CompanyIntelligenceAgent();
   readonly evidenceAgent = new EvidenceAgent();
+  readonly readiness = new RoleReadinessAgent();
+  readonly careerPresence = new CareerPresenceAgent();
   readonly recruiter = new RecruiterAgent();
   readonly resume = new ResumeAgent();
   readonly outreach = new OutreachAgent();
@@ -40,18 +42,32 @@ export class HiredEngine {
     return opportunity;
   }
 
+  assessReadiness(opportunityId: string) {
+    const opp = this.requiredOpportunity(opportunityId);
+    return this.readiness.assess(opp.id, opp.gaps);
+  }
+
+  careerPresenceProfile(socialPlatforms: string[] = ['linkedin']) {
+    return this.careerPresence.build(this.profile.id, [...this.store.evidence.values()], socialPlatforms);
+  }
+
   package(opportunityId: string) {
     const opp = this.requiredOpportunity(opportunityId);
     const evidence = opp.evidenceIds.map(id => this.store.evidence.get(id)).filter((x): x is Evidence => Boolean(x));
+    const readiness = this.readiness.assess(opp.id, opp.gaps);
     const resume = this.resume.build(this.profile, opp.job, opp.gaps, evidence);
     const outreach = this.outreach.draft(this.profile, opp.job, evidence);
     const application = this.application.assemble(opp.job, resume, outreach);
     const interview = this.interview.prepare(opp.job, opp.intelligence, opp.gaps);
-    return { opportunity: opp, resume, outreach, application, interview };
+    return { opportunity: opp, readiness, resume, outreach, application, interview };
   }
 
   requestOutreach(opportunityId: string) { const p = this.package(opportunityId); return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths }); }
-  requestApplication(opportunityId: string) { const p = this.package(opportunityId); return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', p.application as Record<string, unknown>); }
+  requestApplication(opportunityId: string) {
+    const p = this.package(opportunityId);
+    if (!p.readiness.canOccupyRole) throw new Error(`role readiness gate blocked application: ${p.readiness.blockingGaps.join(', ') || 'insufficient demonstrated readiness'}`);
+    return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', { ...p.application, readiness: p.readiness } as Record<string, unknown>);
+  }
 
   recordFeedback(event: FeedbackEvent) {
     this.store.addFeedback(event);
@@ -61,7 +77,7 @@ export class HiredEngine {
     return this.strategist.analyze(this.store.feedback);
   }
 
-  dashboard() {
+  careerStatus() {
     const items = [...this.store.opportunities.values()].sort((a,b) => b.score.total - a.score.total);
     const counts = items.reduce<Record<string, number>>((a,o) => (a[o.state] = (a[o.state] ?? 0) + 1, a), {});
     return { counts, priority: items.filter(o => !o.hardRejected).slice(0, 10), pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'), funnelLearning: this.strategist.analyze(this.store.feedback) };
