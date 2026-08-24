@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -14,7 +15,7 @@ export interface ConversationMessage {
 
 interface ConversationSnapshot { messages: ConversationMessage[]; }
 
-const messageId = () => `msg_${crypto.randomUUID()}`;
+const messageId = () => `msg_${randomUUID()}`;
 
 export class ConversationStore {
   private messages: ConversationMessage[] = [];
@@ -97,8 +98,12 @@ export class ConversationStore {
         id: string; account_id: string; role: ConversationRole; content: string; metadata?: Record<string, unknown>; created_at: Date | string;
       }>('select id,account_id,role,content,metadata,created_at from hired_conversation_messages where account_id=$1 order by created_at desc limit $2', [accountId, safeLimit]);
       return result.rows.reverse().map(row => ({
-        id: row.id, accountId: row.account_id, role: row.role, content: row.content,
-        metadata: row.metadata, createdAt: new Date(row.created_at).toISOString()
+        id: row.id,
+        accountId: row.account_id,
+        role: row.role,
+        content: row.content,
+        metadata: row.metadata,
+        createdAt: new Date(row.created_at).toISOString()
       }));
     }
     await this.loadFile();
