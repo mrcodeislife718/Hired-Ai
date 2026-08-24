@@ -4,12 +4,18 @@ import { candidate, evidence } from './seed.js';
 
 const command = process.argv[2] ?? 'demo';
 if (command !== 'demo') throw new Error(`unknown command: ${command}`);
+
 const engine = new HiredEngine(candidate, evidence);
 for (const job of demoJobs) engine.ingest(job);
-const dashboard = engine.dashboard();
-const top = dashboard.priority[0];
-if (top) {
+
+const status = engine.careerStatus();
+const topDecision = status.priority[0];
+const top = topDecision ? engine.store.opportunities.get(topDecision.opportunityId) : undefined;
+
+if (!top) {
+  console.log(JSON.stringify(status, null, 2));
+} else {
   const pkg = engine.package(top.id);
-  const approval = engine.requestApplication(top.id);
-  console.log(JSON.stringify({ dashboard, topPackage: pkg, approvalBoundary: approval }, null, 2));
-} else console.log(JSON.stringify(dashboard, null, 2));
+  const approval = pkg.readiness.canOccupyRole ? engine.requestApplication(top.id) : undefined;
+  console.log(JSON.stringify({ careerStatus: status, topPackage: pkg, approvalBoundary: approval }, null, 2));
+}
