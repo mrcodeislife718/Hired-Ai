@@ -1,98 +1,187 @@
 # Hired AI
 
-**A governed, evidence-grounded AI job-acquisition system that users can talk or type to.**
+**A governed, evidence-grounded AI career agent built to help people get hired, build stronger professional networks, and continuously improve their career opportunities.**
 
-Hired AI is designed to work the job search with the user rather than forcing the user to operate a hiring dashboard. The primary experience is conversational: describe the role you want, ask for the best opportunities, question why a job is a fit, prepare an application, find a recruiter path, work follow-ups, or prepare for an interview.
+Hired AI turns the job search into a conversation. Users talk or type to a friendly AI career agent that can understand what they want, discover opportunities, evaluate real fit, connect qualifications to evidence, prepare applications, identify useful professional relationships, plan outreach and follow-up, prepare interviews, and learn from hiring outcomes.
 
-Behind that conversation is a governed multi-agent system for opportunity discovery, qualification, company intelligence, portfolio-evidence matching, scoring, application preparation, outreach, follow-up, interview preparation, and hiring-funnel learning.
+> **Product principle:** the user should manage their career by talking to their AI career agent — not by operating recruiting software.
 
-> **Product principle:** the AI operates the job-acquisition system. The user talks to the AI and stays in control of consequential actions.
+## The Hired AI experience
 
-## Product experience
+The customer experience is centered on a dedicated conversational career agent with a persistent text-and-voice interface.
 
-The default interface is a familiar AI conversation surface:
+The agent should feel approachable enough for someone looking for their first job and capable enough for an experienced professional managing a complex career transition.
+
+Users can say things such as:
+
+```text
+Find me jobs that I have a strong chance of getting.
+
+I need something remote paying at least $90,000.
+
+Why do you think this company is a good fit for me?
+
+What am I missing for this position?
+
+Improve my resume for this job without exaggerating my experience.
+
+Who should I know at this company?
+
+Help me build a stronger network in AI engineering.
+
+Who should I follow up with today?
+
+Prepare me for tomorrow's interview.
+
+What have you learned from the jobs that rejected me?
+
+What should I do this week to increase my chances of getting hired?
+```
+
+Hired AI responds conversationally and introduces structured information only when it helps the user make a decision or complete an action: job matches, evidence, people, application material, interview preparation, follow-ups, and career recommendations can appear directly within the conversation.
+
+## What Hired AI works on
+
+### Find better opportunities
+
+Hired AI discovers and normalizes opportunities, applies the user's real constraints, rejects obvious mismatches, evaluates requirements, estimates fit, and prioritizes opportunities worth the user's time.
+
+The objective is not maximum application volume. It is better opportunities and better hiring outcomes.
+
+### Prove the user's fit
+
+Required skills can be classified as strong, adjacent, learning-gap, or missing. Hired AI can connect qualifications to repository-backed portfolio evidence instead of relying entirely on unsupported self-description.
+
+This allows the agent to explain both:
+
+- why the user is qualified
+- where the user genuinely has a gap
+
+Application material should never require invented experience to sound competitive.
+
+### Build the user's professional network
+
+Getting hired is not only an application problem. It is also a relationship problem.
+
+Hired AI is designed to help users deliberately grow useful professional relationships by identifying relevant recruiters, hiring managers, employees, founders, peers, communities, and potential referral paths using public or authorized information with retained provenance.
+
+The agent can help users:
+
+- identify people worth knowing
+- understand why a relationship may be relevant
+- prepare personalized outreach
+- remember prior interactions
+- plan appropriate follow-ups
+- maintain relationships beyond a single application
+- discover introductions and referral paths
+- build a network around the career they want, not merely the career they currently have
+
+The goal is a durable professional network, not spam automation.
+
+### Prepare stronger applications
+
+For promising opportunities, Hired AI can assemble an evidence-grounded candidate package including resume strategy, relevant portfolio proof, outreach preparation, application material, gap disclosures, and interview preparation.
+
+### Reach the right humans
+
+Hired AI can derive and retain sourced human paths for relevant recruiters, hiring managers, company contacts, referrals, and authorized communication channels.
+
+Relationship-building and identity-bearing communication remain governed actions.
+
+### Keep momentum
+
+Hired AI remembers opportunity state, follow-ups, responses, interviews, rejections, and offers so users do not have to manually reconstruct their job search every day.
+
+A user can simply ask:
+
+```text
+What needs my attention today?
+```
+
+and receive prioritized next actions in the conversation.
+
+### Prepare for interviews
+
+Hired AI can use role requirements, company intelligence, evidence gaps, and the user's actual background to prepare focused interview guidance rather than generic question lists.
+
+### Learn from outcomes
+
+No-response, rejection, recruiter-screen, technical, onsite, and offer outcomes become feedback evidence.
+
+Over time the system is designed to learn which roles, positioning, evidence, relationships, and strategies produce better results while retaining deterministic guardrails around consequential actions.
+
+## How the system works
+
+```text
+              USER
+       voice / text / files
+                |
+                v
+       Conversational Career Agent
+                |
+       Intent + career context
+                |
+     +----------+-----------+
+     |          |           |
+     v          v           v
+ Opportunities People    Career Strategy
+     |          |           |
+     +----------+-----------+
+                |
+                v
+Scout -> Qualification -> Company Intelligence
+                |
+                v
+        Portfolio Evidence Graph
+                |
+                v
+       Explainable Opportunity Score
+                |
+                v
+       Recruiter / Human Paths
+                |
+                v
+ Resume + Application + Outreach + Interview Prep
+                |
+                v
+             Governor
+       prepare -> approve -> execute
+                |
+                v
+ Hiring State + Relationships + Follow-Up + Feedback
+                |
+                +----------------------+
+                                       |
+                              Career Learning Loop
+```
+
+## Conversational interface
+
+The primary product surface is a familiar AI conversation experience:
 
 - persistent text composer
-- browser voice input when supported
-- resume/text attachment ingestion
-- opportunity cards embedded directly in the conversation
-- contextual actions such as **Explain fit**, **Prepare application**, **Find recruiter path**, and **Prepare interview**
-- job, application, people, interview, and pipeline navigation
-- approval-gated identity-bearing actions
+- voice input where supported
+- resume and career-document attachment
+- contextual job cards inside conversation
+- evidence and gap explanations
+- people and relationship suggestions
+- application preparation
+- interview preparation
+- follow-up recommendations
+- approval requests presented at the moment authorization is needed
+- persistent career context
 
-Example requests:
+The product should minimize navigation. When information can be requested naturally, the user should be able to ask for it naturally.
 
-```text
-Find me the strongest AI engineering roles that match what I have actually built.
-
-Why am I only an 88% match for this role?
-
-Which opportunity gives me the best estimated chance of an interview?
-
-Prepare the application, but do not submit anything until I approve it.
-
-Find a recruiter or hiring-manager path for my top opportunity.
-
-Prepare me for the technical interview.
-
-Work my pipeline and tell me what needs attention today.
-```
-
-## What Hired AI does
-
-```text
-Conversation / voice / resume / preferences
-                    |
-                    v
-             Intent + context
-                    |
-                    v
-        Opportunity discovery layer
-                    |
-                    v
-Scout -> Qualification -> Company Intelligence
-                    |
-                    v
-         Portfolio Evidence Graph
-                    |
-                    v
-        Explainable Opportunity Score
-                    |
-                    v
-         Human / Recruiter Paths
-                    |
-                    v
- Resume + Application + Outreach + Interview Prep
-                    |
-                    v
-               Governor
-          prepare -> approve -> execute
-                    |
-                    v
-      Hiring Pipeline + Follow-Up + Feedback
-                    |
-                    +--------------------+
-                                         |
-                              Career Strategy Learning
-```
-
-## Current capabilities
-
-### Conversational job acquisition
-
-The browser UI is now chat-first rather than dashboard-first. Hired AI can conversationally surface ranked opportunities, explain qualification, expose evidence gaps, prepare application packages, show recruiter paths, prepare interviews, and summarize pipeline state.
-
-The current local conversational layer is deterministic and evidence-backed. The architecture already contains a provider abstraction for adding a production model backend without moving authorization, state mutation, verification, or audit truth into the model.
-
-### Multi-agent pipeline
+## Multi-agent career system
 
 Specialized components currently cover:
 
 - Scout / opportunity normalization
-- qualification and hard rejection rules
+- qualification and hard-rejection rules
 - company intelligence
 - evidence matching
-- recruiter/human-path discovery
+- recruiter and human-path discovery
 - resume preparation
 - outreach preparation
 - application assembly
@@ -100,13 +189,9 @@ Specialized components currently cover:
 - interview preparation
 - career-strategy feedback analysis
 
-### Evidence-grounded qualification
+The conversational agent coordinates these capabilities rather than requiring the user to operate each component separately.
 
-Required skills are classified as strong, adjacent, learning-gap, or missing. Qualification and application preparation can reference repository-backed evidence rather than relying on unsupported self-description.
-
-The system is designed to make unsupported qualification claims detectable rather than allowing them to become persuasive but unverified application copy.
-
-### Explainable ranking
+## Explainable opportunity ranking
 
 Opportunity scoring currently retains components for:
 
@@ -119,50 +204,29 @@ Opportunity scoring currently retains components for:
 - freshness
 - estimated interview probability
 
-Hired AI optimizes for quality opportunities and interviews rather than raw application volume.
+Users should be able to ask *why* any opportunity was ranked the way it was.
 
-### Governed external actions
+## Governed autonomy
 
-Identity-bearing actions are separated into explicit stages:
+Hired AI is designed to do substantial work for the user without silently taking identity-bearing actions.
+
+Consequential external actions follow an explicit control path:
 
 ```text
 prepare
--> request approval
--> human approval
+-> request authorization
+-> user approval
 -> execute
 -> audit
 ```
 
 The Governor owns consequential state transitions, approval requests, execution eligibility, and audit events.
 
-### Durable state
+This creates a path toward increasingly autonomous assistance without confusing convenience with unrestricted authority.
 
-- PostgreSQL persistence when `DATABASE_URL` is configured
-- atomic local JSON checkpoints otherwise
-- automatic checkpointing
-- audit events
-- trace recording
-- bounded retries and circuit breakers
+## Hiring lifecycle
 
-### Job discovery
-
-Current discovery adapters include:
-
-- Greenhouse
-- Lever
-- authorized JSON feeds
-
-The discovery system normalizes incoming jobs before qualification and deduplicates source/source-ID pairs.
-
-### Portfolio indexing
-
-Hired AI can index GitHub portfolio evidence so opportunity qualification can be connected to concrete repository-backed proof.
-
-### Resume ingestion
-
-Text resume ingestion extracts recognized technical skills, URLs, and contact references conservatively. The conversational interface accepts text-readable attachments for local analysis.
-
-## Hiring pipeline
+Internally, Hired AI can retain structured hiring state:
 
 ```text
 DISCOVERED
@@ -182,26 +246,58 @@ ONSITE
 OFFER
 ```
 
-`REJECTED` is retained as an explicit terminal/feedback state rather than disappearing from the evidence history.
+`REJECTED` remains explicit feedback evidence rather than disappearing from the user's career history.
 
-## Why the interface is conversational
+Users do not need to manage these states manually. They can ask Hired AI where things stand and what should happen next.
 
-Job seekers already know how to use modern AI assistants. Hired AI deliberately uses that familiar interaction model so the user does not need to learn a complex operations dashboard before receiving value.
+## Current infrastructure
 
-The command center, pipeline state, approvals, traces, and metrics remain available as system capabilities, but they support the AI rather than becoming the primary user experience.
+- PostgreSQL persistence when `DATABASE_URL` is configured
+- atomic local JSON checkpoints otherwise
+- automatic checkpointing
+- audit events
+- trace recording
+- bounded retries and circuit breakers
+- Greenhouse discovery adapter
+- Lever discovery adapter
+- authorized JSON-feed ingestion
+- GitHub portfolio evidence indexing
+- conservative text-resume ingestion
+- model-provider abstraction
 
-This reduces interaction friction while preserving strong control boundaries underneath the conversation.
+The AI/model layer may interpret language and assist reasoning, while authorization, durable state, evidence, verification, and consequential controls remain outside the model boundary.
+
+## Product goals
+
+Hired AI is being built to improve measurable career outcomes, including:
+
+- qualified opportunities discovered
+- high-fit opportunities pursued
+- useful professional relationships created
+- recruiter and hiring-manager conversations
+- application-to-screen conversion
+- interview conversion
+- time to interview
+- offer conversion
+- compensation improvement
+- time saved by the user
+
+The repository does not claim outcome improvements until they are measured with real users.
 
 ## Architecture principles
 
-1. **Conversation is the interface, not the authority boundary.**
-2. **Models may interpret intent; deterministic systems own consequential controls.**
-3. **Qualification claims should be tied to evidence whenever possible.**
-4. **External actions require explicit authorization.**
-5. **Job-search quality matters more than application volume.**
-6. **Failures, rejections, and no-responses are learning evidence.**
-7. **Users should be able to understand why an opportunity was ranked highly.**
-8. **The product should remain useful when a model provider is unavailable.**
+1. **Conversation is the primary customer interface.**
+2. **The AI should do the operational work instead of transferring that work to the user.**
+3. **Models may interpret intent; deterministic systems own consequential controls.**
+4. **Qualification claims should be tied to evidence whenever possible.**
+5. **External identity-bearing actions require appropriate authorization.**
+6. **Job-search quality matters more than application volume.**
+7. **Professional relationships are long-term assets, not disposable application channels.**
+8. **Failures, rejections, and no-responses are learning evidence.**
+9. **Users should be able to understand why an opportunity or action is recommended.**
+10. **The product should remain useful when a model provider is unavailable.**
+11. **Automation must not become spam, deception, or fabricated qualification.**
+12. **Success means helping the user move toward better employment and career outcomes.**
 
 ## Run locally
 
@@ -237,30 +333,13 @@ LEVER_COMPANIES=...
 JOB_JSON_FEEDS=...
 ```
 
-If `HIRED_API_KEY` is configured, `/api/*` requires the corresponding bearer token. If it is omitted, the local demo can be used without authentication setup.
+If `HIRED_API_KEY` is configured, `/api/*` requires the corresponding bearer token. If it is omitted, the local development experience can be used without authentication setup.
 
-## API surface
+## API
 
-Important endpoints include:
+The implementation exposes APIs for conversation, opportunities, candidate packages, governed application/outreach requests, hiring-state transitions, feedback, approvals, discovery, portfolio evidence, follow-ups, audit evidence, traces, and health checks.
 
-```text
-POST /api/chat
-GET  /api/dashboard
-GET  /api/opportunities
-GET  /api/opportunities/:id/package
-POST /api/opportunities/:id/outreach-request
-POST /api/opportunities/:id/application-request
-POST /api/opportunities/:id/transition
-POST /api/opportunities/:id/feedback
-POST /api/approvals/:id/approve
-POST /api/approvals/:id/execute
-POST /api/discover
-POST /api/portfolio/index
-GET  /api/followups
-GET  /api/audit
-GET  /api/traces
-GET  /health
-```
+The API is an implementation surface; customers should not need to understand it to use Hired AI effectively.
 
 ## Verification
 
@@ -282,6 +361,8 @@ The repository includes deterministic tests and Node 22/24 CI configuration.
 
 ## Product status
 
-Hired AI is an active engineering product. The current implementation provides the governed job-acquisition foundation and a conversational local product surface. Production commercialization still requires deployment-specific choices for identity, billing, model/provider infrastructure, external action connectors, privacy/data-retention policy, and measured acquisition/conversion proof.
+Hired AI is an active engineering product. The current implementation provides the governed job-acquisition foundation and conversational product surface.
 
-The repository does not claim production user volume or hiring outcomes that have not been measured.
+Commercial completion requires measured user outcomes plus production decisions and implementation around identity, billing, model infrastructure, voice, job-source coverage, external communication/application connectors, privacy, data retention, relationship intelligence, and deployment.
+
+The standard for completion is not simply that Hired AI can search for jobs. It should become an efficient, trustworthy career agent that materially improves a user's ability to discover opportunities, build relationships, win interviews, secure offers, and advance their career.
