@@ -56,9 +56,7 @@ export class HiredEngine {
     };
   }
 
-  private careerOS() {
-    return new CareerOperatingSystem(this.profile, [...this.store.evidence.values()]);
-  }
+  private careerOS() { return new CareerOperatingSystem(this.profile, [...this.store.evidence.values()]); }
 
   ingest(raw: RawJob): Opportunity {
     const job = this.scout.normalize(raw);
@@ -134,7 +132,8 @@ export class HiredEngine {
     return result;
   }
   opportunityWatches() { return this.saved.listWatches(this.profile.id); }
-  removeOpportunityWatch(id: string) { return this.saved.removeWatch(id); }
+  evaluateOpportunityWatches() { return this.saved.evaluate([...this.store.opportunities.values()], this.profile.id); }
+  removeOpportunityWatch(watchId: string) { return this.saved.removeWatch(watchId); }
 
   updateCareerTwin<K extends keyof Pick<CareerTwinSnapshot,'goals'|'strengths'|'growthAreas'|'preferredWork'|'dislikedWork'|'values'|'compensation'|'trajectory'|'constraints'>>(key: K, fact: CareerTwinSnapshot[K]) {
     const snapshot = this.careerTwin.update(key, fact);
@@ -188,6 +187,7 @@ export class HiredEngine {
       careerOutcomes: this.careerOutcomeSummary(),
       savedOpportunities: this.saved.listSaved(),
       watches: this.opportunityWatches(),
+      watchMatches: this.evaluateOpportunityWatches(),
       reliability
     };
   }
