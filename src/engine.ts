@@ -2,9 +2,12 @@ import type { CandidateProfile, Evidence, FeedbackEvent, Opportunity, RawJob } f
 import { ApplicationAgent, CareerPresenceAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, RoleReadinessAgent, ScoutAgent } from './agents.js';
 import { CareerOperatingSystem } from './career-os.js';
 import { Governor } from './governor.js';
+import { assessOpportunityReliability, canonicalOpportunityKey, shouldRecommendWithoutReverification, type OpportunityReliability } from './opportunity-reliability.js';
 import { scoreOpportunity } from './scoring.js';
 import { Store } from './store.js';
 import { id } from './utils.js';
+
+type ReliableOpportunity = Opportunity & { reliability: OpportunityReliability };
 
 export class HiredEngine {
   readonly store = new Store();
@@ -34,17 +37,39 @@ export class HiredEngine {
   ingest(raw: RawJob): Opportunity {
     const job = this.scout.normalize(raw);
     this.governor.assertNoDuplicate(job.source, job.sourceId);
+
+    const canonicalKey = canonicalOpportunityKey(job);
+    const canonicalDuplicate = [...this.store.opportunities.values()].find(existing => {
+      const known = (existing as ReliableOpportunity).reliability?.canonicalKey;
+      return known ? known === canonicalKey : canonicalOpportunityKey(existing.job) === canonicalKey;
+    });
+    if (canonicalDuplicate) throw new Error(`duplicate opportunity across sources: ${canonicalDuplicate.job.company} ${canonicalDuplicate.job.title}`);
+
+    const reliability = assessOpportunityReliability(job);
     const rejectionReasons = this.qualification.hardReject(job, this.profile);
+    if (!shouldRecommendWithoutReverification(reliability)) {
+      rejectionReasons.push('opportunity requires source re-verification before recommendation');
+    }
+
     const intelligence = this.intelligence.analyze(job);
     const match = this.evidenceAgent.match(job, [...this.store.evidence.values()]);
     const score = scoreOpportunity(job, this.profile, match.gaps);
     const now = new Date().toISOString();
-    const opportunity: Opportunity = {
+    const opportunity = {
       id: id('opp'), job, state: rejectionReasons.length ? 'REJECTED' : 'DISCOVERED', hardRejected: Boolean(rejectionReasons.length), rejectionReasons,
-      intelligence, gaps: match.gaps, evidenceIds: match.evidenceIds, score, humanPaths: this.recruiter.derivePublicPaths(job), createdAt: now, updatedAt: now
-    };
+      intelligence, gaps: match.gaps, evidenceIds: match.evidenceIds, score, humanPaths: this.recruiter.derivePublicPaths(job), createdAt: now, updatedAt: now,
+      reliability
+    } as ReliableOpportunity;
     this.store.saveOpportunity(opportunity);
-    this.governor.audit('ScoutAgent', 'OPPORTUNITY_INGESTED', opportunity.id, { source: job.source, sourceId: job.sourceId, score: score.total });
+    this.governor.audit('ScoutAgent', 'OPPORTUNITY_INGESTED', opportunity.id, {
+      source: job.source,
+      sourceId: job.sourceId,
+      score: score.total,
+      canonicalKey: reliability.canonicalKey,
+      freshnessStatus: reliability.freshnessStatus,
+      reliabilityConfidence: reliability.confidence,
+      unknowns: reliability.unknowns
+    });
     if (!opportunity.hardRejected) this.governor.transition(opportunity.id, 'QUALIFIED');
     return opportunity;
   }
@@ -78,18 +103,21 @@ export class HiredEngine {
     const outreach = this.outreach.draft(this.profile, opp.job, evidence);
     const application = this.application.assemble(opp.job, resume, outreach);
     const interview = this.interview.prepare(opp.job, opp.intelligence, opp.gaps);
-    return { opportunity: opp, readiness, resume, outreach, application, interview };
+    const reliability = (opp as ReliableOpportunity).reliability ?? assessOpportunityReliability(opp.job);
+    return { opportunity: opp, reliability, readiness, resume, outreach, application, interview };
   }
 
   requestOutreach(opportunityId: string) {
     const p = this.package(opportunityId);
-    return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths });
+    if (!shouldRecommendWithoutReverification(p.reliability)) throw new Error('opportunity source must be re-verified before outreach');
+    return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths, reliability: p.reliability });
   }
 
   requestApplication(opportunityId: string) {
     const p = this.package(opportunityId);
+    if (!shouldRecommendWithoutReverification(p.reliability)) throw new Error('opportunity source must be re-verified before application');
     if (!p.readiness.canOccupyRole) throw new Error(`role readiness gate blocked application: ${p.readiness.blockingGaps.join(', ') || 'insufficient demonstrated readiness'}`);
-    return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', { ...p.application, readiness: p.readiness } as Record<string, unknown>);
+    return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', { ...p.application, readiness: p.readiness, reliability: p.reliability } as Record<string, unknown>);
   }
 
   recordFeedback(event: FeedbackEvent) {
@@ -114,12 +142,19 @@ export class HiredEngine {
     const items = [...this.store.opportunities.values()].sort((a,b) => b.score.total - a.score.total);
     const counts = items.reduce<Record<string, number>>((a,o) => (a[o.state] = (a[o.state] ?? 0) + 1, a), {});
     const decisions = this.careerOS().selectOpportunities(items);
+    const reliability = items.map(item => ({
+      opportunityId: item.id,
+      company: item.job.company,
+      title: item.job.title,
+      ...((item as ReliableOpportunity).reliability ?? assessOpportunityReliability(item.job))
+    }));
     return {
       counts,
       priority: decisions.filter(d => d.decision === 'pursue').slice(0, 10),
       developmentCandidates: decisions.filter(d => d.decision === 'develop-first').slice(0, 10),
       pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'),
-      funnelLearning: this.strategist.analyze(this.store.feedback)
+      funnelLearning: this.strategist.analyze(this.store.feedback),
+      reliability
     };
   }
 
