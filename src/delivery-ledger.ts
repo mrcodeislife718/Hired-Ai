@@ -37,8 +37,8 @@ export class DeliveryLedger {
     return structuredClone(event);
   }
 
-  history(actionId: string) { return (this.events.get(actionId) ?? []).map(structuredClone); }
+  history(actionId: string) { return (this.events.get(actionId) ?? []).map(event => structuredClone(event)); }
   state(actionId: string) { return this.events.get(actionId)?.at(-1)?.state; }
   isConfirmed(actionId: string) { return this.state(actionId) === 'verified-received'; }
-  all() { return [...this.events.entries()].flatMap(([,events]) => events.map(structuredClone)); }
+  all() { return [...this.events.values()].flatMap(events => events.map(event => structuredClone(event))); }
 }
