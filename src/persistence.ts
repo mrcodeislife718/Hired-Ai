@@ -1,6 +1,9 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ApprovalRequest, AuditEvent, Evidence, FeedbackEvent, Opportunity } from './domain.js';
+import type { CareerTwinSnapshot } from './career-twin.js';
+import type { CareerOutcomeEvent } from './career-outcomes.js';
+import type { OpportunityWatchRule, SavedOpportunity } from './saved-opportunities.js';
 
 export interface StoreSnapshot {
   opportunities: Opportunity[];
@@ -8,6 +11,10 @@ export interface StoreSnapshot {
   approvals: ApprovalRequest[];
   audit: AuditEvent[];
   feedback: FeedbackEvent[];
+  careerTwin?: CareerTwinSnapshot;
+  careerOutcomes?: CareerOutcomeEvent[];
+  savedOpportunities?: SavedOpportunity[];
+  opportunityWatches?: OpportunityWatchRule[];
 }
 
 export interface PersistenceAdapter {
