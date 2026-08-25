@@ -1,3 +1,6 @@
+import type { Opportunity } from './domain.js';
+import { normalize } from './utils.js';
+
 export type WatchCadence = 'daily' | 'weekly';
 
 export interface SavedOpportunity {
@@ -22,6 +25,14 @@ export interface OpportunityWatchRule {
   updatedAt: string;
 }
 
+export interface WatchMatch {
+  watchId: string;
+  opportunityId: string;
+  matchedAt: string;
+  reasons: string[];
+  fitScore: number;
+}
+
 export class SavedOpportunityStore {
   private readonly saved = new Map<string, SavedOpportunity>();
   private readonly watches = new Map<string, OpportunityWatchRule>();
@@ -38,13 +49,8 @@ export class SavedOpportunityStore {
     return structuredClone(item);
   }
 
-  unsave(opportunityId: string) {
-    return this.saved.delete(opportunityId);
-  }
-
-  listSaved() {
-    return [...this.saved.values()].sort((a,b) => Date.parse(b.savedAt)-Date.parse(a.savedAt)).map(structuredClone);
-  }
+  unsave(opportunityId: string) { return this.saved.delete(opportunityId); }
+  listSaved() { return [...this.saved.values()].sort((a,b) => Date.parse(b.savedAt)-Date.parse(a.savedAt)).map(structuredClone); }
 
   upsertWatch(rule: OpportunityWatchRule) {
     if (!rule.id || !rule.candidateId || !rule.query.trim()) throw new Error('watch id, candidateId and query are required');
@@ -56,11 +62,36 @@ export class SavedOpportunityStore {
     return structuredClone(next);
   }
 
-  listWatches(candidateId?: string) {
-    return [...this.watches.values()].filter(rule => !candidateId || rule.candidateId === candidateId).map(structuredClone);
-  }
-
+  listWatches(candidateId?: string) { return [...this.watches.values()].filter(rule => !candidateId || rule.candidateId === candidateId).map(structuredClone); }
   removeWatch(id: string) { return this.watches.delete(id); }
+
+  evaluate(opportunities: Opportunity[], candidateId?: string, at = new Date().toISOString()): WatchMatch[] {
+    const rules = this.listWatches(candidateId).filter(rule => rule.enabled);
+    const matches: WatchMatch[] = [];
+    for (const rule of rules) {
+      const query = normalize(rule.query);
+      for (const opportunity of opportunities) {
+        if (opportunity.hardRejected) continue;
+        const job = opportunity.job;
+        const haystack = normalize(`${job.title} ${job.company} ${job.description} ${job.requirements.join(' ')}`);
+        const reasons: string[] = [];
+        if (query && !haystack.includes(query) && !query.split(/\s+/).every(token => haystack.includes(token))) continue;
+        reasons.push('query matched');
+        if (rule.targetTitles?.length && !rule.targetTitles.some(title => normalize(job.title).includes(normalize(title)))) continue;
+        if (rule.targetTitles?.length) reasons.push('target title matched');
+        if (rule.locations?.length && job.workMode !== 'remote' && !rule.locations.some(location => normalize(job.location).includes(normalize(location)))) continue;
+        if (rule.locations?.length) reasons.push(job.workMode === 'remote' ? 'remote role satisfies location watch' : 'location matched');
+        if (rule.workModes?.length && !rule.workModes.includes(job.workMode)) continue;
+        if (rule.workModes?.length) reasons.push('work mode matched');
+        if (rule.minimumSalary !== undefined && (job.salaryMax ?? job.salaryMin ?? 0) < rule.minimumSalary) continue;
+        if (rule.minimumSalary !== undefined) reasons.push('compensation threshold met');
+        if (rule.minimumFitScore !== undefined && opportunity.score.total < rule.minimumFitScore) continue;
+        if (rule.minimumFitScore !== undefined) reasons.push('fit threshold met');
+        matches.push({ watchId:rule.id, opportunityId:opportunity.id, matchedAt:at, reasons, fitScore:opportunity.score.total });
+      }
+    }
+    return matches.sort((a,b) => b.fitScore-a.fitScore);
+  }
 
   snapshot() { return { saved: this.listSaved(), watches: this.listWatches() }; }
 }
