@@ -51,6 +51,10 @@ const pct = (numerator: number, denominator: number) => denominator ? Math.round
 export class CareerOutcomeLedger {
   private readonly events: CareerOutcomeEvent[] = [];
 
+  constructor(events: CareerOutcomeEvent[] = []) {
+    for (const event of events) this.record(event);
+  }
+
   record(event: CareerOutcomeEvent) {
     if (!event.candidateId) throw new Error('candidateId required');
     if (!event.at || Number.isNaN(Date.parse(event.at))) throw new Error('valid outcome timestamp required');
@@ -59,12 +63,12 @@ export class CareerOutcomeLedger {
       if (value !== undefined && (value < 0 || value > 100)) throw new Error(`${field} must be between 0 and 100`);
     }
     if (this.events.some(existing => existing.id === event.id)) throw new Error('duplicate outcome event');
-    this.events.push({ ...event });
-    return event;
+    this.events.push(structuredClone(event));
+    return structuredClone(event);
   }
 
   all(candidateId?: string) {
-    return this.events.filter(event => !candidateId || event.candidateId === candidateId).map(event => ({ ...event }));
+    return this.events.filter(event => !candidateId || event.candidateId === candidateId).map(event => structuredClone(event));
   }
 
   summary(candidateId?: string): OutcomeSummary {
