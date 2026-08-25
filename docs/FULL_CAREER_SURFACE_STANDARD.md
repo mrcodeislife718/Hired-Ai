@@ -83,6 +83,17 @@ Compare base, bonus, equity, sign-on, benefits, flexibility, title/scope, growth
 ### Outcome Learning
 Track application -> interview -> offer -> acceptance -> 30 days -> 90 days -> one year -> promotion/departure. Learn from satisfaction, compensation delta, growth alignment and whether both sides would choose the match again.
 
+## Implemented durable-state and employer-foundation tranche
+
+- Career Twin can now be restored from durable account state while preserving provenance constraints.
+- Career Outcome Ledger can now be restored from persisted longitudinal events.
+- Saved opportunities and job-watch rules are included in the runtime persistence snapshot.
+- Watch rules deterministically evaluate title, location, work mode, salary and fit thresholds and do not match rejected opportunities.
+- Employer organizations now have role-based access controls for owners, admins, recruiters, hiring managers and viewers.
+- Employer role intake separates real responsibilities, must-haves, trainable requirements, preferred requirements, team context and measurable success outcomes.
+- Candidate sourcing is deny-by-default and requires explicit visibility/organization consent.
+- External delivery now has an explicit state machine: prepared -> approved -> dispatched -> provider-acknowledged -> verified-received. Dispatch alone is never treated as successful receipt.
+
 ## Permanent ranking law
 
 Employer payment may purchase labeled reach, workflow, analytics, service, seats or integrations. It may never purchase a better organic candidate/opportunity fit score.
@@ -108,3 +119,15 @@ A surface is not complete because a type or helper exists. Each surface progress
 11. Outcome measurement
 
 No surface should be labeled production-complete until all applicable gates pass.
+
+## Remaining production closure
+
+- expose saved jobs, watches, Career Twin edits and outcome check-ins through authenticated production API/UI
+- add real notification delivery for watch matches with user-controlled cadence and opt-out
+- wire free Resume Studio as a true no-subscription acquisition entry flow
+- connect salary and employer-quality data sources with provenance and freshness
+- persist employer organizations, jobs, members and consent in production storage
+- expose employer organizations, role intake, posting, screening, sourcing and hiring dashboards through authenticated workflows
+- integrate the delivery ledger with real messaging providers and independently confirmed delivery states
+- add interview scheduling/calendar connectors and ATS/HRIS integrations
+- finish distributed observability, backup/restore drills and provider-failure qualification
