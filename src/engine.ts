@@ -1,6 +1,7 @@
 import type { CandidateProfile, Evidence, FeedbackEvent, Opportunity, RawJob } from './domain.js';
 import { ApplicationAgent, CareerPresenceAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, RoleReadinessAgent, ScoutAgent } from './agents.js';
 import { CareerOperatingSystem } from './career-os.js';
+import { CareerOutcomeLedger, enforceRecommendationPolicy, type CareerOutcomeEvent } from './career-outcomes.js';
 import { Governor } from './governor.js';
 import { assessOpportunityReliability, canonicalOpportunityKey, shouldRecommendWithoutReverification, type OpportunityReliability } from './opportunity-reliability.js';
 import { scoreOpportunity } from './scoring.js';
@@ -25,6 +26,7 @@ export class HiredEngine {
   readonly followup = new FollowUpAgent();
   readonly interview = new InterviewAgent();
   readonly strategist = new CareerStrategist();
+  readonly outcomes = new CareerOutcomeLedger();
 
   constructor(readonly profile: CandidateProfile, evidence: Evidence[] = []) {
     evidence.forEach(e => this.store.saveEvidence(e));
@@ -47,9 +49,7 @@ export class HiredEngine {
 
     const reliability = assessOpportunityReliability(job);
     const rejectionReasons = this.qualification.hardReject(job, this.profile);
-    if (!shouldRecommendWithoutReverification(reliability)) {
-      rejectionReasons.push('opportunity requires source re-verification before recommendation');
-    }
+    if (!shouldRecommendWithoutReverification(reliability)) rejectionReasons.push('opportunity requires source re-verification before recommendation');
 
     const intelligence = this.intelligence.analyze(job);
     const match = this.evidenceAgent.match(job, [...this.store.evidence.values()]);
@@ -91,6 +91,28 @@ export class HiredEngine {
     return this.careerOS().selectOpportunities([...this.store.opportunities.values()], minimumOpportunityScore);
   }
 
+  explainRecommendation(opportunityId: string, fulfillmentScore?: number, sponsored = false, paidBoost = 0) {
+    const opp = this.requiredOpportunity(opportunityId) as ReliableOpportunity;
+    const readiness = this.assessReadiness(opportunityId);
+    const reliability = opp.reliability ?? assessOpportunityReliability(opp.job);
+    const explanation = [
+      `opportunity fit ${opp.score.total}/100`,
+      `role readiness ${readiness.readinessScore}/100`,
+      `source reliability ${reliability.confidence}/100`
+    ];
+    if (fulfillmentScore !== undefined) explanation.push(`fulfillment fit ${fulfillmentScore}/100`);
+    return enforceRecommendationPolicy({
+      organicFitScore: opp.score.total,
+      readinessScore: readiness.readinessScore,
+      fulfillmentScore,
+      reliabilityConfidence: reliability.confidence,
+      sponsored,
+      paidBoost,
+      explanation,
+      unknowns: reliability.unknowns
+    });
+  }
+
   networkPlan(socialPlatforms: string[] = ['linkedin']) {
     return this.careerOS().buildNetworkPlan([...this.store.opportunities.values()], socialPlatforms);
   }
@@ -104,20 +126,21 @@ export class HiredEngine {
     const application = this.application.assemble(opp.job, resume, outreach);
     const interview = this.interview.prepare(opp.job, opp.intelligence, opp.gaps);
     const reliability = (opp as ReliableOpportunity).reliability ?? assessOpportunityReliability(opp.job);
-    return { opportunity: opp, reliability, readiness, resume, outreach, application, interview };
+    const recommendation = this.explainRecommendation(opportunityId);
+    return { opportunity: opp, reliability, readiness, recommendation, resume, outreach, application, interview };
   }
 
   requestOutreach(opportunityId: string) {
     const p = this.package(opportunityId);
     if (!shouldRecommendWithoutReverification(p.reliability)) throw new Error('opportunity source must be re-verified before outreach');
-    return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths, reliability: p.reliability });
+    return this.governor.requestApproval(opportunityId, 'SEND_OUTREACH', { message: p.outreach, paths: p.opportunity.humanPaths, reliability: p.reliability, recommendation: p.recommendation });
   }
 
   requestApplication(opportunityId: string) {
     const p = this.package(opportunityId);
     if (!shouldRecommendWithoutReverification(p.reliability)) throw new Error('opportunity source must be re-verified before application');
     if (!p.readiness.canOccupyRole) throw new Error(`role readiness gate blocked application: ${p.readiness.blockingGaps.join(', ') || 'insufficient demonstrated readiness'}`);
-    return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', { ...p.application, readiness: p.readiness, reliability: p.reliability } as Record<string, unknown>);
+    return this.governor.requestApproval(opportunityId, 'SUBMIT_APPLICATION', { ...p.application, readiness: p.readiness, reliability: p.reliability, recommendation: p.recommendation } as Record<string, unknown>);
   }
 
   recordFeedback(event: FeedbackEvent) {
@@ -138,6 +161,25 @@ export class HiredEngine {
     return this.strategist.analyze(this.store.feedback);
   }
 
+  recordCareerOutcome(event: CareerOutcomeEvent) {
+    if (event.candidateId !== this.profile.id) throw new Error('career outcome candidate does not match engine profile');
+    if (event.opportunityId) this.requiredOpportunity(event.opportunityId);
+    const recorded = this.outcomes.record(event);
+    this.governor.audit('CareerOutcomeLedger', 'CAREER_OUTCOME_RECORDED', event.opportunityId, {
+      checkpoint: event.checkpoint,
+      candidateSatisfaction: event.candidateSatisfaction,
+      employerSatisfaction: event.employerSatisfaction,
+      wouldCandidateChooseAgain: event.wouldCandidateChooseAgain,
+      wouldEmployerChooseAgain: event.wouldEmployerChooseAgain,
+      regretReason: event.regretReason
+    });
+    return { recorded, summary: this.outcomes.summary(this.profile.id) };
+  }
+
+  careerOutcomeSummary() {
+    return this.outcomes.summary(this.profile.id);
+  }
+
   careerStatus() {
     const items = [...this.store.opportunities.values()].sort((a,b) => b.score.total - a.score.total);
     const counts = items.reduce<Record<string, number>>((a,o) => (a[o.state] = (a[o.state] ?? 0) + 1, a), {});
@@ -154,6 +196,7 @@ export class HiredEngine {
       developmentCandidates: decisions.filter(d => d.decision === 'develop-first').slice(0, 10),
       pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'),
       funnelLearning: this.strategist.analyze(this.store.feedback),
+      careerOutcomes: this.careerOutcomeSummary(),
       reliability
     };
   }
