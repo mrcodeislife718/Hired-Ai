@@ -85,9 +85,9 @@ export class EmployerPlatform {
     return structuredClone(job);
   }
 
-  listJobs(orgId: string, actorAccountId: string) {
+  listJobs(orgId: string, actorAccountId: string): EmployerJob[] {
     this.assertPermission(orgId, actorAccountId, 'analytics:view');
-    return [...this.jobs.values()].filter(job => job.organizationId === orgId).map(structuredClone);
+    return [...this.jobs.values()].filter(job => job.organizationId === orgId).map(job => structuredClone(job));
   }
 
   setCandidateConsent(consent: CandidateSourcingConsent) {
