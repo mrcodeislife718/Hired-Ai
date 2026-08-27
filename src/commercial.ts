@@ -18,15 +18,20 @@ export function commercialPlans(): CommercialPlan[] {
       id: 'career',
       name: 'Career',
       monthlyUsd: 19,
-      description: 'Maya for continuous career intelligence, selective job matching, resume modernization and interview preparation.',
+      description: 'Maya for continuous career intelligence, selective job matching, professional presence, resumes and interview preparation.',
       minimumPlanRank: 1,
       features: [
         'Conversational Maya career agent',
-        'Selective opportunity matching',
-        'Resume modernization and tailoring',
-        'GitHub and professional-presence guidance',
-        'Interview preparation',
-        'Career-development plans'
+        'Selective opportunity matching and career-path exploration',
+        'Company, role and compensation intelligence',
+        'Maya Resume Studio with targeted resume variants',
+        'Premium ATS-safe professional and technical templates',
+        'Resume modernization, evidence audit and tailoring',
+        'GitHub and technical-portfolio organization guidance',
+        'LinkedIn and professional-social positioning',
+        'Professional networking plan',
+        'Role-specific interview practice and feedback',
+        'Career-development and readiness plans'
       ],
       stripePriceId: env('STRIPE_PRICE_CAREER')
     },
@@ -34,16 +39,20 @@ export function commercialPlans(): CommercialPlan[] {
       id: 'pro',
       name: 'Pro',
       monthlyUsd: 49,
-      description: 'Maya with relationship intelligence, governed acquisition workflows and continuous career optimization.',
+      description: 'Maya with relationship intelligence, governed acquisition workflows, advanced Resume Studio, negotiation and continuous career optimization.',
       minimumPlanRank: 2,
       features: [
         'Everything in Career',
+        'Executive Signature and Creative Editorial resume templates',
+        'Multi-role resume portfolio and application-specific variants',
+        'Advanced positioning, gap analysis and evidence prioritization',
         'Relationship and networking intelligence',
         'Recruiter and hiring-manager path planning',
         'Governed application and outreach preparation',
-        'Follow-up orchestration',
-        'Outcome learning and conversion analysis',
-        'Offer comparison and negotiation preparation'
+        'Follow-up orchestration and messaging strategy',
+        'Advanced interview simulation across recruiter, behavioral, technical and role rounds',
+        'Offer comparison, total-compensation analysis and negotiation preparation',
+        'Outcome learning and conversion analysis'
       ],
       stripePriceId: env('STRIPE_PRICE_PRO')
     },
@@ -51,14 +60,15 @@ export function commercialPlans(): CommercialPlan[] {
       id: 'concierge',
       name: 'Concierge',
       monthlyUsd: 149,
-      description: 'High-touch career acceleration for users who want Maya plus human review of consequential career moves.',
+      description: 'High-touch career acceleration for users who want Maya plus human review of consequential career moves, positioning, interviews and offers.',
       minimumPlanRank: 3,
       features: [
         'Everything in Pro',
-        'Priority career review workflow',
-        'Human-review handoff for high-impact decisions',
-        'Deep portfolio and positioning review',
-        'Priority interview and offer preparation'
+        'Human-review workflow for high-stakes resumes and career moves',
+        'Priority editorial refinement and executive positioning',
+        'Deep portfolio, GitHub and professional-presence review',
+        'Priority interview and offer negotiation review',
+        'High-stakes career-transition and decision review'
       ],
       stripePriceId: env('STRIPE_PRICE_CONCIERGE')
     }

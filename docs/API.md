@@ -1,49 +1,82 @@
-# Hired AI HTTP API
+# Hired-AI API
 
-The HTTP API supports the conversational **AI Career Agent** and its governed career systems. It is an implementation surface, not the customer's primary interface.
+## Existing production routes
 
-## Conversation
+### Account and billing
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/auth/password`
+- `GET /api/me`
+- `PATCH /api/me/profile`
+- `GET /api/me/export`
+- `DELETE /api/me`
+- `GET /api/plans`
+- `POST /api/billing/checkout`
+- `POST /api/billing/portal`
+- `POST /api/stripe/webhook`
 
-- `POST /api/chat` — conversational orchestration for opportunity, qualification, evidence, relationships, applications, interviews, follow-up, and career-status requests
-
-## Opportunity Intelligence
-
+### Maya and career
+- `POST /api/maya/chat`
+- `GET /api/maya/history`
+- `DELETE /api/maya/history`
+- `GET /api/career/status`
 - `GET /api/opportunities`
-- `POST /api/discover` — run configured authorized source adapters
-- `POST /api/opportunities` — ingest a normalized opportunity
+- `POST /api/discover`
+- `POST /api/github/index`
+- `POST /api/opportunities`
 - `GET /api/opportunities/:id/package`
-
-## Acquisition and governed actions
-
-- `POST /api/opportunities/:id/outreach-request`
 - `POST /api/opportunities/:id/application-request`
+- `POST /api/opportunities/:id/outreach-request`
 - `POST /api/opportunities/:id/transition`
 - `POST /api/opportunities/:id/feedback`
 - `POST /api/approvals/:id/approve`
 - `POST /api/approvals/:id/execute`
 
-Approval execution currently returns the authorized payload to an integration boundary. External communication/application connectors should consume only executed approvals; preparation and authorization remain separate capabilities.
+The execute endpoint releases an authorized payload to the connector boundary. It does not claim that an external send occurred.
 
-## Evidence and career context
+## Next authenticated API tranche
 
-- `POST /api/portfolio/index`
-- `GET /api/followups`
-- `GET /api/audit`
-- `GET /api/traces`
-- `GET /health`
+The durable engines now exist for the following surfaces. These routes remain implementation gates before the surfaces are called production-complete:
 
-Additional APIs for Career Intelligence, Relationship Intelligence, Career Development, and Outcome Learning should evolve behind stable domain contracts rather than becoming separate products.
+### Career Twin
+- `GET /api/career/twin`
+- `PATCH /api/career/twin/:field`
+- `POST /api/career/twin/facts`
 
-## Discovery configuration
+### Longitudinal outcomes
+- `GET /api/career/outcomes`
+- `POST /api/career/outcomes`
+- `GET /api/career/outcomes/summary`
 
-```text
-GREENHOUSE_BOARDS=company1,company2
-LEVER_COMPANIES=company3,company4
-JOB_JSON_FEEDS=https://authorized.example/jobs.json
-```
+### Saved opportunities and watches
+- `GET /api/saved-opportunities`
+- `POST /api/opportunities/:id/save`
+- `DELETE /api/opportunities/:id/save`
+- `GET /api/opportunity-watches`
+- `POST /api/opportunity-watches`
+- `DELETE /api/opportunity-watches/:id`
+- `GET /api/opportunity-watches/matches`
 
-The runtime deliberately avoids undocumented browser automation against job boards. Sources are explicit adapters with provenance and failure isolation.
+### Employer organizations and sourcing
+- `POST /api/employer/organizations`
+- `GET /api/employer/organizations/:id`
+- `POST /api/employer/organizations/:id/members`
+- `GET /api/employer/organizations/:id/jobs`
+- `POST /api/employer/organizations/:id/jobs`
+- `PATCH /api/candidate/sourcing-consent`
+- `GET /api/candidate/sourcing-consent`
 
-## API doctrine
+### Delivery verification
+- `GET /api/deliveries/:actionId`
+- provider callback/webhook routes must transition delivery state from dispatched to provider-acknowledged or verified-received only when provider evidence exists
 
-The customer should not need to understand or manually operate these endpoints. The conversational career agent coordinates them in response to natural-language goals while the deterministic system preserves authorization, evidence, state, and audit boundaries.
+## API laws
+
+- account data is tenant-isolated
+- consequential writes require authentication and authorization
+- application/outreach execution remains explicit-approval gated
+- external dispatch is not equivalent to confirmed receipt
+- employer sourcing is deny-by-default until candidate consent permits visibility
+- paid promotion cannot alter organic fit scores
+- unknowns and source freshness remain visible in consequential recommendations

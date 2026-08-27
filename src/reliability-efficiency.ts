@@ -27,10 +27,8 @@ export class ReliabilityEfficiencyLedger {
   private readonly events: ReliabilityEvent[] = [];
 
   record(event: ReliabilityEvent): void {
-    if (!event.operation) throw new Error("operation is required");
-    if (event.finishedAt !== undefined && event.finishedAt < event.startedAt) {
-      throw new Error("finishedAt cannot precede startedAt");
-    }
+    if (!event.operation) throw new Error('operation is required');
+    if (event.finishedAt !== undefined && event.finishedAt < event.startedAt) throw new Error('finishedAt cannot precede startedAt');
     this.events.push({ ...event });
   }
 
@@ -71,7 +69,7 @@ export async function executeReliably<T>(options: {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const value = await options.primary();
-      if (options.verify && !(await options.verify(value))) throw new Error("verification failed");
+      if (options.verify && !(await options.verify(value))) throw new Error('verification failed');
       options.ledger?.record({ operation: options.operation, startedAt, finishedAt: Date.now(), success: true, retries: attempt });
       return value;
     } catch (error) {
@@ -80,12 +78,12 @@ export async function executeReliably<T>(options: {
   }
   if (options.fallback) {
     const value = await options.fallback();
-    if (options.verify && !(await options.verify(value))) throw new Error("fallback verification failed");
+    if (options.verify && !(await options.verify(value))) throw new Error('fallback verification failed');
     options.ledger?.record({ operation: options.operation, startedAt, finishedAt: Date.now(), success: true, degraded: true, recovered: true, retries });
     return value;
   }
   options.ledger?.record({ operation: options.operation, startedAt, finishedAt: Date.now(), success: false, retries });
-  throw lastError instanceof Error ? lastError : new Error("operation failed");
+  throw lastError instanceof Error ? lastError : new Error('operation failed');
 }
 
 export function shouldReuseStableCareerState(input: { ageMs: number; ttlMs: number; evidenceVersionChanged: boolean }): boolean {

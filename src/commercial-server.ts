@@ -6,7 +6,6 @@ import { checkoutReady, commercialPlans, hasPlan, planById, type PlanId } from '
 import { baseSecurityHeaders, clearSessionCookie, enforceOrigin, sessionCookie, sessionToken } from './http-security.js';
 import { MayaService, type MayaRequest } from './maya-service.js';
 import { SlidingWindowLimiter } from './rate-limit.js';
-import { ReliabilityEfficiencyLedger, executeReliably } from './reliability-efficiency.js';
 import {
   accountIdFromMetadata,
   createBillingPortal,
@@ -23,7 +22,6 @@ import type { FeedbackEvent, PipelineState, RawJob } from './domain.js';
 const platform = new CommercialPlatform();
 const maya = new MayaService();
 const billingLedger = new BillingEventLedger();
-const reliability = new ReliabilityEfficiencyLedger();
 const authLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_AUTH_RATE_LIMIT ?? 12), 15 * 60_000);
 const apiLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_API_RATE_LIMIT ?? 180), 60_000);
 
@@ -165,9 +163,6 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     if (!auth) return;
     const { account, token } = auth;
 
-    if (req.method === 'GET' && url.pathname === '/api/ops/reliability') {
-      return sendJson(res, 200, { reliability: reliability.snapshot() });
-    }
     if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
       await platform.accounts.logout(token);
       return sendJson(res, 200, { ok: true }, { 'set-cookie': clearSessionCookie() });
@@ -213,15 +208,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const engine = runtime.engine;
 
     if (req.method === 'POST' && url.pathname === '/api/maya/chat') {
-      const request = await readJson<MayaRequest>(req);
-      const result = await executeReliably({
-        operation: 'maya.chat',
-        retries: 1,
-        ledger: reliability,
-        primary: () => maya.respond(account.id, engine, request),
-        verify: (value) => Boolean(value)
-      });
-      return sendJson(res, 200, result);
+      return sendJson(res, 200, await maya.respond(account.id, engine, await readJson<MayaRequest>(req)));
     }
     if (req.method === 'GET' && url.pathname === '/api/maya/history') {
       const limit = Number(url.searchParams.get('limit') ?? 40);
@@ -233,28 +220,13 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     }
     if (req.method === 'GET' && url.pathname === '/api/career/status') return sendJson(res, 200, engine.careerStatus());
     if (req.method === 'GET' && url.pathname === '/api/opportunities') return sendJson(res, 200, engine.selectiveOpportunities(60));
-    if (req.method === 'POST' && url.pathname === '/api/discover') {
-      const result = await executeReliably({
-        operation: 'opportunity.discovery',
-        retries: 1,
-        ledger: reliability,
-        primary: () => platform.discoverFor(account),
-        verify: (value) => Boolean(value)
-      });
-      return sendJson(res, 200, result);
-    }
+    if (req.method === 'POST' && url.pathname === '/api/discover') return sendJson(res, 200, await platform.discoverFor(account));
     if (req.method === 'POST' && url.pathname === '/api/github/index') {
       const body = await readJson<{ owner?: string; token?: string }>(req);
       const owner = String(body.owner ?? '').trim();
       if (!owner) return sendJson(res, 400, { error: 'GitHub owner required' });
       const githubToken = typeof body.token === 'string' && body.token.trim() ? body.token.trim() : undefined;
-      const result = await executeReliably({
-        operation: 'github.index',
-        retries: 1,
-        ledger: reliability,
-        primary: () => platform.indexGitHubFor(account, owner, githubToken),
-        verify: (value) => Boolean(value)
-      });
+      const result = await platform.indexGitHubFor(account, owner, githubToken);
       return sendJson(res, 200, result);
     }
     if (req.method === 'POST' && url.pathname === '/api/opportunities') {
@@ -321,5 +293,5 @@ const port = Number(process.env.PORT ?? 3000);
 const server = createServer((req, res) => { void route(req, res); });
 server.listen(port, () => console.log(`Hired AI / Maya listening on http://localhost:${port}`));
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => server.close(() => process.exit(0)));
+  process.on(signal, () => void Promise.all([platform.close(), maya.close(), billingLedger.close()]).finally(() => server.close(() => process.exit(0))));
 }
