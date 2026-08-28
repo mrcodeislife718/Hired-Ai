@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { MAYA_RELATIONSHIP_STANDARD, MayaLanguageModel, mayaLanguagePrompt } from '../src/maya-language.js';
 import { buildMayaRelationshipIntelligence } from '../src/maya-relationship-intelligence.js';
 
-test('Maya relationship standard combines warmth with candid career judgment', () => {
+test('Maya relationship standard combines trusted friendship with conversational career OS identity', () => {
   assert.equal(MAYA_RELATIONSHIP_STANDARD.identity, 'trusted-career-friend');
+  assert.equal(MAYA_RELATIONSHIP_STANDARD.productIdentity, 'conversational-career-operating-system');
   assert.ok(MAYA_RELATIONSHIP_STANDARD.principles.some(item=>/care about the person/i.test(item)));
   assert.ok(MAYA_RELATIONSHIP_STANDARD.principles.some(item=>/challenge weak decisions/i.test(item)));
   assert.ok(MAYA_RELATIONSHIP_STANDARD.principles.some(item=>/never manufacture familiarity/i.test(item)));
+  assert.ok(MAYA_RELATIONSHIP_STANDARD.avoid.includes('chatbot framing'));
   assert.ok(MAYA_RELATIONSHIP_STANDARD.avoid.includes('fake intimacy'));
   assert.ok(MAYA_RELATIONSHIP_STANDARD.avoid.includes('claiming to be human'));
 });
@@ -46,18 +48,24 @@ test('relationship intelligence distinguishes a real setback from generic histor
   assert.ok(relationship.activeThreads.includes('outcome-learning'));
 });
 
-test('Maya language prompt treats recent history as relationship continuity without overruling engine truth', () => {
+test('Maya prompt treats conversation as the operating surface and includes long-term memory without overruling truth', () => {
   const prompt=mayaLanguagePrompt({
     userMessage:'I got rejected from the role we prepared for.',
     deterministicAnswer:'The employer outcome is recorded as rejected. Review the failing stage before changing strategy.',
-    context:{history:[{role:'assistant',content:'We prepared for Acme together.'}],workflow:{currentStep:'outcome-learning'}}
+    context:{
+      history:[{role:'assistant',content:'We prepared for Acme together.'}],
+      longTermMemory:{memories:[{kind:'goal',text:'I want to move into healthcare administration.',source:'explicit-user'}]},
+      workflow:{currentStep:'outcome-learning'}
+    }
   });
-  assert.match(prompt,/trusted career friend/i);
+  assert.match(prompt,/conversational Career Operating System/i);
+  assert.match(prompt,/not a chatbot/i);
+  assert.match(prompt,/conversation is the operating surface/i);
   assert.match(prompt,/RELATIONSHIP INTELLIGENCE/);
-  assert.match(prompt,/RECENT RELATIONSHIP HISTORY/);
+  assert.match(prompt,/LONG-TERM MEMORY/i);
   assert.match(prompt,/Do not pretend to remember anything that is not available/i);
   assert.match(prompt,/deterministic result as ground truth/i);
-  assert.match(prompt,/noSensitiveInference/);
+  assert.match(prompt,/healthcare administration/i);
   assert.match(prompt,/rejected/i);
   assert.match(prompt,/outcome-learning/i);
 });
