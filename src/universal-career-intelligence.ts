@@ -310,7 +310,7 @@ export function predictObjections(profile: CandidateProfile, opportunity: Opport
     if (support>=0.65) return { objection:`concern about ${r.text}`, confidence:Math.round((1-support)*100), treatment:'eliminate-with-evidence' as const, evidenceIds:evidence.filter(e=>similarity(`${e.capability} ${e.claim}`,r.text)>=0.2).map(e=>e.id), responseStrategy:'lead with the strongest directly relevant proof' };
     if (support>=0.25) return { objection:`limited direct proof for ${r.text}`, confidence:70, treatment:'neutralize-with-framing' as const, evidenceIds:evidence.filter(e=>similarity(`${e.capability} ${e.claim}`,r.text)>=0.1).map(e=>e.id), responseStrategy:'use adjacent or transferable evidence and explain the ramp path accurately' };
     const proactive = r.classification==='hard';
-    return { objection:`missing visible proof for ${r.text}`, confidence:proactive?90:55, treatment:proactive?'address-proactively':'leave-unraised', evidenceIds:[], responseStrategy:proactive?'state the gap accurately and provide the strongest legitimate alternative proof or closure plan':'do not volunteer a low-value weakness unless asked' };
+    return { objection:`missing visible proof for ${r.text}`, confidence:proactive?90:55, treatment:(proactive?'address-proactively':'leave-unraised') as ObjectionTreatment, evidenceIds:[], responseStrategy:proactive?'state the gap accurately and provide the strongest legitimate alternative proof or closure plan':'do not volunteer a low-value weakness unless asked' };
   }).filter(o=>o.confidence>=20).sort((a,b)=>b.confidence-a.confidence);
 }
 

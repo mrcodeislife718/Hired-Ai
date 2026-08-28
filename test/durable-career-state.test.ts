@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HiredEngine } from '../src/engine.js';
-import { candidate } from '../src/seed.js';
+import { testCandidate } from './test-records.js';
 
+const candidate=testCandidate();
 const job = {
-  source:'test', sourceId:'job-1', url:'https://example.com/job-1', company:'Example Co', title:'Software Engineer', location:'New York, NY', workMode:'hybrid' as const,
+  source:'test', sourceId:'job-1', url:'https://test.invalid/job-1', company:'Test Co', title:'Software Engineer', location:'New York, NY', workMode:'hybrid' as const,
   description:'Build TypeScript services.', requirements:['TypeScript'], preferred:[], salaryMin:120000, salaryMax:150000, postedAt:new Date().toISOString()
 };
 
 test('Career Twin, outcomes, saved opportunities and watch rules survive engine restore', () => {
-  const engine = new HiredEngine(candidate, [{ id:'e1',skill:'TypeScript',repository:'repo',url:'https://github.com/example/repo',claim:'Built TypeScript services',verification:'repository',strength:0.95 }]);
+  const engine = new HiredEngine(candidate, [{ id:'e1',skill:'TypeScript',repository:'repo',url:'https://test.invalid/repo',claim:'Built TypeScript services',verification:'repository',strength:0.95 }]);
   const opportunity = engine.ingest(job);
   const observedAt = new Date().toISOString();
   engine.updateCareerTwin('preferredWork', { key:'preferredWork', value:['systems design'], source:'user', confidence:'confirmed', evidenceIds:[], observedAt });
