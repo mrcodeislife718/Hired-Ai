@@ -85,6 +85,16 @@ export class Governor {
     return event;
   }
 
+  failDelivery(approvalId:string,detail:string){
+    const approval=this.store.approvals.get(approvalId);
+    if(!approval||approval.status!=='EXECUTED')throw new Error('executed approval required before delivery failure');
+    const state=this.deliveryState(approvalId);
+    if(state!=='dispatched'&&state!=='provider-acknowledged'&&state!=='unknown')throw new Error(`delivery cannot fail from ${state??'missing'} state`);
+    const event=this.deliveries.record({id:id('delivery'),actionId:approval.id,state:'failed',at:new Date().toISOString(),detail:detail.trim()||'external connector delivery failed'});
+    this.audit('DeliveryVerifier','DELIVERY_FAILED',approval.opportunityId,{approvalId,detail:event.detail,previousState:state});
+    return event;
+  }
+
   deliveryState(approvalId:string){return this.deliveries.state(approvalId);}
   deliveryHistory(approvalId:string){return this.deliveries.history(approvalId);}
   deliveryEvents(){return this.deliveries.all();}
