@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ApprovalRequest, Opportunity } from './domain.js';
 import type { CareerPlan, CareerPlanSnapshot } from './goal-plan-execution.js';
 import type { CareerStateNode } from './career-state-graph.js';
-import type { OpportunityWatchMatch } from './saved-opportunities.js';
+import type { WatchMatch } from './saved-opportunities.js';
 
 export type ProactiveAttentionKind =
   | 'plan-step-ready'
@@ -60,7 +60,7 @@ export interface ProactiveEvaluationInput {
   approvals: ApprovalRequest[];
   deliveryState: (approvalId: string) => string | undefined;
   staleNodes: CareerStateNode[];
-  watchMatches: OpportunityWatchMatch[];
+  watchMatches: WatchMatch[];
 }
 
 interface SignalCandidate extends Omit<ProactiveAttentionSignal,'id'|'candidateId'|'firstSeenAt'|'lastSeenAt'|'lastNotifiedAt'|'snoozedUntil'|'acknowledgedAt'|'resolvedAt'|'status'|'occurrenceCount'> {}
@@ -123,8 +123,8 @@ function fromStaleNodes(nodes:CareerStateNode[]):SignalCandidate[]{
   return nodes.filter(node=>node.kind==='credential').map(node=>({key:signalKey(['credential-stale',node.id]),kind:'credential-stale' as const,urgency:'high' as const,title:`Credential needs attention: ${node.label}`,reason:'This credential is stale or has crossed its configured reverification/expiration boundary.',recommendedAction:'Verify whether it is still valid, renew it if required, and refresh canonical career evidence.',source:'career-state',sourceId:node.id,nodeId:node.id,dueAt:node.staleAfter,provenance:[...node.provenance,`career-state-node:${node.id}`],data:{semanticKey:node.semanticKey,staleAfter:node.staleAfter,truthClass:node.truthClass}}));
 }
 
-function fromWatchMatches(matches:OpportunityWatchMatch[]):SignalCandidate[]{
-  return matches.filter(match=>match.matches.length>0).map(match=>{const top=match.matches[0];return {key:signalKey(['opportunity-match',match.watchId,top.opportunityId]),kind:'opportunity-match' as const,urgency:top.score>=85?'high' as const:'medium' as const,title:'A watched opportunity now matches',reason:`A saved opportunity watch found ${match.matches.length} matching role(s); the strongest current match scores ${top.score}.`,recommendedAction:'Review the strongest match before it becomes stale.',source:'opportunity-watch',sourceId:match.watchId,opportunityId:top.opportunityId,provenance:[`opportunity-watch:${match.watchId}`,`opportunity:${top.opportunityId}`],data:{score:top.score,totalMatches:match.matches.length}};});
+function fromWatchMatches(matches:WatchMatch[]):SignalCandidate[]{
+  return matches.map(match=>({key:signalKey(['opportunity-match',match.watchId,match.opportunityId]),kind:'opportunity-match' as const,urgency:match.fitScore>=85?'high' as const:'medium' as const,title:'A watched opportunity now matches',reason:`A saved opportunity watch found a role with fit score ${match.fitScore}.`,recommendedAction:'Review the match before it becomes stale.',source:'opportunity-watch',sourceId:match.watchId,opportunityId:match.opportunityId,provenance:[`opportunity-watch:${match.watchId}`,`opportunity:${match.opportunityId}`],data:{fitScore:match.fitScore,reasons:[...match.reasons],matchedAt:match.matchedAt}}));
 }
 
 export class ProactiveMayaEngine {
