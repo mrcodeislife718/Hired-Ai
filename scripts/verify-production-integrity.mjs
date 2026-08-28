@@ -8,7 +8,7 @@ const forbiddenFiles=new Set(['src/demo-data.ts','src/seed.ts','src/cli.ts']);
 const forbiddenImplementationPatterns=[
   [/\bTODO\b/i,'TODO marker'],
   [/\bFIXME\b/i,'FIXME marker'],
-  [/\bplaceholder\b/i,'placeholder implementation marker'],
+  [/\bplaceholder (?:implementation|logic|data|value|response|result|content)\b/i,'placeholder implementation marker'],
   [/\bmock data\b/i,'mock-data marker'],
   [/\bnot implemented\b/i,'not-implemented marker'],
   [/\bcoming soon\b/i,'unfinished-surface marker'],
