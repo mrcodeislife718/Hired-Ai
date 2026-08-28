@@ -1,0 +1,39 @@
+name: Patch Delivery API
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-delivery-api
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire delivery acknowledgement and receipt endpoints
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/commercial-server-v2.ts')
+          text=p.read_text()
+          needle="  const execute=url.pathname.match(/^\\/api\\/approvals\\/([^/]+)\\/execute$/);if(execute&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const payload=engine.governor.executeApproved(execute[1]);await runtime.checkpoint();return sendJson(res,200,{payload,note:'authorized payload released to external connector boundary; no external send is claimed'});}\n"
+          insert="""  const delivery=url.pathname.match(/^\\/api\\/approvals\\/([^/]+)\\/delivery$/);if(delivery&&req.method==='GET'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,200,{state:engine.governor.deliveryState(delivery[1]),history:engine.governor.deliveryHistory(delivery[1])});}\n  const providerAck=url.pathname.match(/^\\/api\\/approvals\\/([^/]+)\\/provider-acknowledged$/);if(providerAck&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.providerAcknowledged(providerAck[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:false});}\n  const verifiedReceipt=url.pathname.match(/^\\/api\\/approvals\\/([^/]+)\\/verified-received$/);if(verifiedReceipt&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.verifyReceived(verifiedReceipt[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:true});}\n""" + needle
+          if 'provider-acknowledged$/' not in text:
+              if needle not in text:
+                  raise SystemExit('delivery insertion point not found')
+              text=text.replace(needle,insert,1)
+              p.write_text(text)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/patch-delivery-api.yml
+          git add src/commercial-server-v2.ts
+          git commit -m "Expose verified delivery receipt API"
+          git push
