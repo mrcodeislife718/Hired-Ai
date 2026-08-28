@@ -2,6 +2,7 @@ import type { CandidateProfile, Evidence, FeedbackEvent, Opportunity, RawJob } f
 import { ApplicationAgent, CareerPresenceAgent, CareerStrategist, CompanyIntelligenceAgent, EvidenceAgent, FollowUpAgent, InterviewAgent, OutreachAgent, QualificationAgent, RecruiterAgent, ResumeAgent, RoleReadinessAgent, ScoutAgent } from './agents.js';
 import { CareerOperatingSystem } from './career-os.js';
 import { CareerOutcomeLedger, enforceRecommendationPolicy, type CareerOutcomeEvent } from './career-outcomes.js';
+import { CareerStateCoordinator, type CareerStateCoordinatorSnapshot } from './career-state-coordinator.js';
 import { CareerTwin, type CareerFact, type CareerTwinSnapshot } from './career-twin.js';
 import { Governor } from './governor.js';
 import { assessOpportunityReliability, canonicalOpportunityKey, shouldRecommendWithoutReverification, type OpportunityReliability } from './opportunity-reliability.js';
@@ -17,11 +18,12 @@ export interface EngineDurableState {
   careerOutcomes?: CareerOutcomeEvent[];
   savedOpportunities?: SavedOpportunity[];
   opportunityWatches?: OpportunityWatchRule[];
+  careerState?: CareerStateCoordinatorSnapshot;
 }
 
 export class HiredEngine {
   readonly store = new Store();
-  readonly governor = new Governor(this.store);
+  readonly governor: Governor;
   readonly scout = new ScoutAgent();
   readonly qualification = new QualificationAgent();
   readonly intelligence = new CompanyIntelligenceAgent();
@@ -38,9 +40,15 @@ export class HiredEngine {
   readonly outcomes: CareerOutcomeLedger;
   readonly careerTwin: CareerTwin;
   readonly saved: SavedOpportunityStore;
+  readonly careerState: CareerStateCoordinator;
 
   constructor(readonly profile: CandidateProfile, evidence: Evidence[] = [], durable: EngineDurableState = {}) {
-    evidence.forEach(e => this.store.saveEvidence(e));
+    this.careerState = new CareerStateCoordinator(profile, durable.careerState);
+    this.governor = new Governor(this.store, audit => this.careerState.captureGovernorAudit(audit, audit.opportunityId ? this.store.opportunities.get(audit.opportunityId) : undefined));
+    evidence.forEach(e => {
+      this.store.saveEvidence(e);
+      if (!durable.careerState) this.careerState.syncEvidence(e);
+    });
     this.outcomes = new CareerOutcomeLedger(durable.careerOutcomes ?? []);
     this.careerTwin = new CareerTwin(profile.id, durable.careerTwin);
     this.saved = new SavedOpportunityStore({ saved: durable.savedOpportunities, watches: durable.opportunityWatches });
@@ -52,7 +60,8 @@ export class HiredEngine {
       careerTwin: this.careerTwin.current(),
       careerOutcomes: this.outcomes.all(this.profile.id),
       savedOpportunities: saved.saved,
-      opportunityWatches: saved.watches
+      opportunityWatches: saved.watches,
+      careerState: this.careerState.snapshot()
     };
   }
 
@@ -86,6 +95,11 @@ export class HiredEngine {
     });
     if (!opportunity.hardRejected) this.governor.transition(opportunity.id, 'QUALIFIED');
     return opportunity;
+  }
+
+  addEvidence(evidence: Evidence) {
+    this.store.saveEvidence(evidence);
+    return this.careerState.syncEvidence(evidence);
   }
 
   assessReadiness(opportunityId: string) { const opp = this.requiredOpportunity(opportunityId); return this.readiness.assess(opp.id, opp.gaps); }
@@ -138,9 +152,15 @@ export class HiredEngine {
   updateCareerTwin<K extends keyof Pick<CareerTwinSnapshot,'goals'|'strengths'|'growthAreas'|'preferredWork'|'dislikedWork'|'values'|'compensation'|'trajectory'|'constraints'>>(key: K, fact: CareerTwinSnapshot[K]) {
     const snapshot = this.careerTwin.update(key, fact);
     this.governor.audit('CareerTwin','CAREER_TWIN_UPDATED',undefined,{key,source:(fact as CareerFact).source,confidence:(fact as CareerFact).confidence,version:snapshot.version});
+    this.careerState.syncCareerTwinField(key, fact as CareerFact, snapshot.version);
     return snapshot;
   }
-  addCareerFact(fact: CareerFact) { const snapshot = this.careerTwin.addFact(fact); this.governor.audit('CareerTwin','CAREER_FACT_ADDED',undefined,{key:fact.key,source:fact.source,confidence:fact.confidence}); return snapshot; }
+  addCareerFact(fact: CareerFact) {
+    const snapshot = this.careerTwin.addFact(fact);
+    this.governor.audit('CareerTwin','CAREER_FACT_ADDED',undefined,{key:fact.key,source:fact.source,confidence:fact.confidence});
+    this.careerState.syncCareerFact(fact, snapshot.version);
+    return snapshot;
+  }
 
   requestOutreach(opportunityId: string) {
     const p = this.package(opportunityId);
@@ -168,6 +188,7 @@ export class HiredEngine {
     if (event.opportunityId) this.requiredOpportunity(event.opportunityId);
     const recorded = this.outcomes.record(event);
     this.governor.audit('CareerOutcomeLedger', 'CAREER_OUTCOME_RECORDED', event.opportunityId, { checkpoint:event.checkpoint,candidateSatisfaction:event.candidateSatisfaction,employerSatisfaction:event.employerSatisfaction,wouldCandidateChooseAgain:event.wouldCandidateChooseAgain,wouldEmployerChooseAgain:event.wouldEmployerChooseAgain,regretReason:event.regretReason });
+    this.careerState.syncOutcome(recorded);
     return { recorded, summary: this.outcomes.summary(this.profile.id) };
   }
   careerOutcomeSummary() { return this.outcomes.summary(this.profile.id); }
@@ -184,6 +205,7 @@ export class HiredEngine {
       pendingApprovals: [...this.store.approvals.values()].filter(a => a.status === 'PENDING'),
       funnelLearning: this.strategist.analyze(this.store.feedback),
       careerTwin: this.careerTwin.current(),
+      careerState: this.careerState.summary(),
       careerOutcomes: this.careerOutcomeSummary(),
       savedOpportunities: this.saved.listSaved(),
       watches: this.opportunityWatches(),
