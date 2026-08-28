@@ -73,7 +73,7 @@ test('positioning portfolio ranks strongest proof ahead of evidence-limited clai
   const portfolio = buildPositioningPortfolio({
     profile:candidate,
     evidence,
-    requirements:['AI agents','TypeScript','Kubernetes','registered nursing license'],
+    requirements:['AI agents','TypeScript','AWS','registered nursing license'],
     leadCount:2
   });
   assert.equal(portfolio.claims.length,4);
