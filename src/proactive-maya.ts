@@ -141,19 +141,20 @@ export class ProactiveMayaEngine {
     for(const candidate of candidates){
       const existing=this.signals.get(candidate.key);
       if(!existing){const signal:ProactiveAttentionSignal={...clone(candidate),id:`pat_${randomUUID()}`,candidateId:this.candidateId,firstSeenAt:at,lastSeenAt:at,status:'active',occurrenceCount:1};this.signals.set(signal.key,signal);transitions.push({type:'raised',signal:clone(signal)});continue;}
-      const status=existing.status==='resolved'?'active':existing.status;
-      const updated:ProactiveAttentionSignal={...existing,...clone(candidate),status,lastSeenAt:at,resolvedAt:undefined,occurrenceCount:existing.occurrenceCount+1};
+      const snoozeExpired=existing.status==='snoozed'&&(!existing.snoozedUntil||Date.parse(existing.snoozedUntil)<=now.getTime());
+      const status=existing.status==='resolved'||snoozeExpired?'active':existing.status;
+      const updated:ProactiveAttentionSignal={...existing,...clone(candidate),status,lastSeenAt:at,resolvedAt:undefined,snoozedUntil:snoozeExpired?undefined:existing.snoozedUntil,occurrenceCount:existing.occurrenceCount+1};
       const materiallyChanged=existing.urgency!==updated.urgency||existing.reason!==updated.reason||existing.recommendedAction!==updated.recommendedAction||existing.status!==updated.status||existing.dueAt!==updated.dueAt;
       this.signals.set(updated.key,updated);if(materiallyChanged)transitions.push({type:'updated',signal:clone(updated)});
     }
-    for(const existing of this.signals.values())if(!currentKeys.has(existing.key)&&existing.status!=='resolved'){const resolved={...existing,status:'resolved' as const,resolvedAt:at,lastSeenAt:at};this.signals.set(existing.key,resolved);transitions.push({type:'resolved',signal:clone(resolved)});}
+    for(const existing of this.signals.values())if(!currentKeys.has(existing.key)&&existing.status!=='resolved'){const resolved={...existing,status:'resolved' as const,resolvedAt:at,lastSeenAt:at,occurrenceCount:existing.occurrenceCount+1};this.signals.set(existing.key,resolved);transitions.push({type:'resolved',signal:clone(resolved)});}
     return {signals:this.actionable(now),transitions,summary:this.summary(now)};
   }
 
   actionable(now=new Date(),limit=20){return clone([...this.signals.values()].filter(signal=>signal.status==='active'||(signal.status==='snoozed'&&(!signal.snoozedUntil||Date.parse(signal.snoozedUntil)<=now.getTime()))).sort((a,b)=>urgencyRank[b.urgency]-urgencyRank[a.urgency]||Date.parse(a.firstSeenAt)-Date.parse(b.firstSeenAt)).slice(0,limit));}
-  markNotified(signalId:string,at=new Date()){const signal=this.requiredById(signalId);const updated={...signal,lastNotifiedAt:iso(at)};this.signals.set(signal.key,updated);return clone(updated);}
-  acknowledge(signalId:string,at=new Date()){const signal=this.requiredById(signalId);const updated={...signal,status:'acknowledged' as const,acknowledgedAt:iso(at),snoozedUntil:undefined};this.signals.set(signal.key,updated);return clone(updated);}
-  snooze(signalId:string,until:Date){if(Number.isNaN(until.getTime()))throw new Error('valid proactive Maya snooze time required');const signal=this.requiredById(signalId);const updated={...signal,status:'snoozed' as const,snoozedUntil:iso(until),acknowledgedAt:undefined};this.signals.set(signal.key,updated);return clone(updated);}
+  markNotified(signalId:string,at=new Date()){const signal=this.requiredById(signalId);const stamp=iso(at);const updated={...signal,lastNotifiedAt:stamp,lastSeenAt:stamp,occurrenceCount:signal.occurrenceCount+1};this.signals.set(signal.key,updated);return clone(updated);}
+  acknowledge(signalId:string,at=new Date()){const signal=this.requiredById(signalId);const stamp=iso(at);const updated={...signal,status:'acknowledged' as const,acknowledgedAt:stamp,lastSeenAt:stamp,snoozedUntil:undefined,occurrenceCount:signal.occurrenceCount+1};this.signals.set(signal.key,updated);return clone(updated);}
+  snooze(signalId:string,until:Date){if(Number.isNaN(until.getTime()))throw new Error('valid proactive Maya snooze time required');const signal=this.requiredById(signalId);const updated={...signal,status:'snoozed' as const,snoozedUntil:iso(until),acknowledgedAt:undefined,lastSeenAt:new Date().toISOString(),occurrenceCount:signal.occurrenceCount+1};this.signals.set(signal.key,updated);return clone(updated);}
   get(signalId:string){return clone(this.requiredById(signalId));}
   all(){return clone([...this.signals.values()]);}
   snapshot():ProactiveMayaSnapshot{return {candidateId:this.candidateId,signals:this.all()};}
