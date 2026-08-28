@@ -92,7 +92,7 @@ function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    return `{${Object.keys(obj).sort().map(key => `${JSON.stringify(key)}:${stable(obj[key])}`).join(',')}}`;
+    return `{${Object.keys(obj).filter(key => obj[key] !== undefined).sort().map(key => `${JSON.stringify(key)}:${stable(obj[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }
