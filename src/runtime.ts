@@ -18,7 +18,8 @@ export class HiredRuntime {
         careerTwin: snapshot?.careerTwin,
         careerOutcomes: snapshot?.careerOutcomes,
         savedOpportunities: snapshot?.savedOpportunities,
-        opportunityWatches: snapshot?.opportunityWatches
+        opportunityWatches: snapshot?.opportunityWatches,
+        careerState: snapshot?.careerState
       }
     );
     if (snapshot) {
@@ -35,8 +36,10 @@ export class HiredRuntime {
   async checkpoint() {
     const span = this.traces.start('persistence.checkpoint');
     try {
+      const careerState = this.engine.careerState.summary();
+      if (!careerState.eventIntegrity.valid) throw new Error(`career event fabric integrity failed: ${careerState.eventIntegrity.reason}`);
       await this.persistence.save(this.snapshot());
-      span.end({ opportunities: this.engine.store.opportunities.size, saved: this.engine.saved.listSaved().length, outcomes: this.engine.outcomes.all().length, deliveries:this.engine.governor.deliveryEvents().length });
+      span.end({ opportunities: this.engine.store.opportunities.size, saved: this.engine.saved.listSaved().length, outcomes: this.engine.outcomes.all().length, deliveries:this.engine.governor.deliveryEvents().length, careerStateVersion:careerState.graph.version, careerEvents:careerState.eventIntegrity.events });
     } catch (error) { span.fail(error); throw error; }
   }
 
