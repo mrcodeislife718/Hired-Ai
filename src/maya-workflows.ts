@@ -47,14 +47,13 @@ export interface WorkflowRequestContext {
   funnel?: unknown;
 }
 
-export interface WorkflowResponseContext {
-  type?: unknown;
-}
+export interface WorkflowResponseContext { type?: unknown; }
 
 const invariantRules = [
   'Use only defensible career facts and evidence.',
   'Keep legally or professionally required credentials as hard gates.',
   'Require authorization before identity-bearing external actions.',
+  'Do not claim external delivery until provider receipt is verified.',
   'Preserve unknowns instead of manufacturing certainty.',
   'Record outcomes so future recommendations can improve.'
 ];
@@ -73,7 +72,7 @@ function classify(type:unknown):MayaWorkflowKind {
   if(value==='career-health'||value==='funnel-diagnosis')return'career-health';
   if(value==='career-audit'||value==='resume-request'||value==='github-career')return'resume';
   if(value==='network')return'network';
-  if(value==='opportunities'||value==='career-status')return'opportunity-discovery';
+  if(value==='opportunities'||value==='career-status'||value==='status')return'opportunity-discovery';
   if(value==='fit'||value==='develop-first')return'opportunity-fit';
   if(value==='application')return'application';
   if(value==='application-questions')return'application-questions';
@@ -91,8 +90,7 @@ function selectedOpportunity(engine:HiredEngine,id?:string){
 function commonFoundation(engine:HiredEngine){
   const twin=engine.careerTwin.current();
   const hasDirection=engine.profile.constraints.preferredTitles.length>0||twin.goals.value.length>0||Boolean(twin.trajectory.value.desired);
-  const evidenceCount=engine.store.evidence.size;
-  return {twin,hasDirection,evidenceCount};
+  return {twin,hasDirection,evidenceCount:engine.store.evidence.size};
 }
 
 export function buildMayaWorkflowState(engine:HiredEngine,request:WorkflowRequestContext,response:WorkflowResponseContext):MayaWorkflowState {
@@ -101,8 +99,9 @@ export function buildMayaWorkflowState(engine:HiredEngine,request:WorkflowReques
   const opportunity=selectedOpportunity(engine,request.opportunityId);
   const readiness=opportunity?engine.assessReadiness(opportunity.id):undefined;
   const status=engine.careerStatus();
-  const pendingApplication=opportunity?status.pendingApprovals.find(a=>a.opportunityId===opportunity.id&&a.action==='SUBMIT_APPLICATION'):undefined;
-  const hasOutcome=engine.careerOutcomeSummary().totalEvents>0;
+  const applicationApproval=opportunity?[...engine.store.approvals.values()].filter(a=>a.opportunityId===opportunity.id&&a.action==='SUBMIT_APPLICATION').at(-1):undefined;
+  const deliveryState=applicationApproval?engine.governor.deliveryState(applicationApproval.id):undefined;
+  const hasOutcome=opportunity?engine.outcomes.all(engine.profile.id).some(event=>event.opportunityId===opportunity.id):engine.careerOutcomeSummary().totalEvents>0;
   const steps:MayaWorkflowStep[]=[];
   let completionDefinition='A verified next career decision is reached and the resulting outcome is recorded.';
 
@@ -144,10 +143,24 @@ export function buildMayaWorkflowState(engine:HiredEngine,request:WorkflowReques
     steps.push(readiness?.canOccupyRole?complete('readiness','Pass readiness gate',`Role readiness is ${readiness.readinessScore}/100.`):opportunity?blocked('readiness','Pass readiness gate',`Role readiness is ${readiness?.readinessScore??0}/100.`,'Close or validate blocking gaps before submission.'):notNeeded('readiness','Pass readiness gate','No opportunity selected yet.'));
     steps.push(opportunity&&foundation.evidenceCount>0?complete('package','Compile one evidence package','The opportunity can be compiled against the current evidence store.'):opportunity?blocked('package','Compile one evidence package','No evidence is available for a defensible application package.','Add legitimate evidence before generating final artifacts.'):notNeeded('package','Compile one evidence package','No opportunity selected yet.'));
     if(kind==='application-questions')steps.push(request.applicationQuestions?.length?complete('questions','Answer screening questions',`${request.applicationQuestions.length} application question(s) were supplied.`):ready('questions','Answer screening questions','No application questions were supplied.','Paste the application questions.'));
-    if(kind==='application')steps.push(pendingApplication?complete('approval','Request submission authorization','A submission approval request is pending.'):readiness?.canOccupyRole?ready('approval','Request submission authorization','The package may be prepared, but external submission cannot occur without authorization.','Request application approval.'):notNeeded('approval','Request submission authorization','Readiness must pass first.'));
+    if(kind==='application'){
+      if(!applicationApproval)steps.push(readiness?.canOccupyRole?ready('approval','Request submission authorization','The package may be prepared, but external submission cannot occur without authorization.','Request application approval.'):notNeeded('approval','Request submission authorization','Readiness must pass first.'));
+      else if(applicationApproval.status==='PENDING')steps.push(ready('approval','Approve submission','The submission request exists but has not been authorized.','Review the exact package and explicitly approve or reject it.'));
+      else steps.push(complete('approval','Authorize submission','Explicit authorization was recorded.'));
+
+      if(applicationApproval?.status==='APPROVED')steps.push(ready('dispatch','Dispatch approved package','The action is authorized but has not yet crossed the external connector boundary.','Execute the approved action.'));
+      else if(applicationApproval?.status==='EXECUTED')steps.push(complete('dispatch','Dispatch approved package','The authorized payload crossed the external connector boundary.'));
+      else steps.push(notNeeded('dispatch','Dispatch approved package','Authorization must complete first.'));
+
+      if(applicationApproval?.status==='EXECUTED'){
+        if(deliveryState==='verified-received')steps.push(complete('receipt','Verify employer receipt','Provider receipt is verified.'));
+        else if(deliveryState==='provider-acknowledged')steps.push(ready('receipt','Verify employer receipt','The provider acknowledged the message, but end-recipient receipt is not yet verified.','Wait for or ingest verifiable receipt evidence.'));
+        else steps.push(ready('receipt','Verify employer receipt','Dispatch occurred, but Maya cannot claim the employer received it yet.','Ingest provider acknowledgement and verified receipt evidence.'));
+      } else steps.push(notNeeded('receipt','Verify employer receipt','The package has not been dispatched.'));
+    }
     if(kind==='interview')steps.push(opportunity?ready('practice','Run role-specific practice','Preparation exists; performance should be tested against the role and likely objections.','Start a structured interview round and score the response against evidence, clarity, judgment, and role relevance.'):notNeeded('practice','Run role-specific practice','No opportunity selected yet.'));
-    steps.push(hasOutcome?complete('learn','Record outcome','A career outcome is already present in the durable ledger.'):ready('learn','Record outcome','The workflow is not closed until the result is captured.','Record the application, screen, interview, rejection, offer, or post-hire outcome when known.'));
-    completionDefinition=kind==='interview'?'The user is prepared against the actual role, completes evaluation, and the result is recorded for learning.':'A truthful role-specific package is authorized, executed through the approved channel, and the result is recorded for learning.';
+    steps.push(hasOutcome?complete('learn','Record outcome','A career outcome for this opportunity is present in the durable ledger.'):ready('learn','Record outcome','This workflow is not closed until the result is captured.','Record the application, screen, interview, rejection, offer, or post-hire outcome when known.'));
+    completionDefinition=kind==='interview'?'The user is prepared against the actual role, completes evaluation, and the result is recorded for learning.':'A truthful role-specific package is authorized, dispatched, externally verified where applicable, and the result is recorded for learning.';
   }
 
   if(kind==='offer-negotiation'){
@@ -157,20 +170,9 @@ export function buildMayaWorkflowState(engine:HiredEngine,request:WorkflowReques
     completionDefinition='The user reaches an evidence-backed accept, negotiate, or decline decision and records the final terms and outcome.';
   }
 
-  if(steps.length===0){
-    steps.push(ready('intent','Clarify career outcome','Maya needs a concrete outcome to choose the right workflow.','State the career outcome you want.'));
-  }
+  if(steps.length===0)steps.push(ready('intent','Clarify career outcome','Maya needs a concrete outcome to choose the right workflow.','State the career outcome you want.'));
 
   const firstBlocked=steps.find(s=>s.status==='blocked');
   const firstReady=steps.find(s=>s.status==='ready');
-  return {
-    kind,
-    endToEnd:true,
-    complete:steps.every(s=>s.status==='complete'||s.status==='not-needed'),
-    blocked:Boolean(firstBlocked),
-    currentStep:(firstBlocked??firstReady)?.id,
-    steps,
-    completionDefinition,
-    invariants:[...invariantRules]
-  };
+  return {kind,endToEnd:true,complete:steps.every(s=>s.status==='complete'||s.status==='not-needed'),blocked:Boolean(firstBlocked),currentStep:(firstBlocked??firstReady)?.id,steps,completionDefinition,invariants:[...invariantRules]};
 }
