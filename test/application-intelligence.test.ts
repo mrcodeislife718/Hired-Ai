@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HiredEngine } from '../src/engine.js';
-import { candidate, evidence } from '../src/seed.js';
-import { demoJobs } from '../src/demo-data.js';
+import { testCandidate, testEvidence, testJobs } from './test-records.js';
 import { auditPositionedClaim, buildPositioningPortfolio, buildPositioningVariants, positionCapability, CANDIDATE_POSITIONING_POLICY } from '../src/candidate-positioning.js';
 import {
   alignJobDescription,
@@ -13,9 +12,12 @@ import {
   discoverHiddenRoles
 } from '../src/application-intelligence.js';
 
+const candidate=testCandidate();
+const evidence=testEvidence();
+const jobs=testJobs();
 const opportunities = () => {
   const engine = new HiredEngine(candidate,evidence);
-  return demoJobs.map(job=>engine.ingest(job));
+  return jobs.map(job=>engine.ingest(job));
 };
 
 test('job alignment separates supported, evidence-limited and unsupported requirements', () => {
