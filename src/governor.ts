@@ -47,8 +47,19 @@ export class Governor {
   executeApproved(approvalId: string) {
     const approval = this.store.approvals.get(approvalId);
     if (!approval || approval.status !== 'APPROVED') throw new Error('explicit approval required');
+    const opportunity = this.store.opportunities.get(approval.opportunityId);
+    if (!opportunity) throw new Error('opportunity not found');
+
     approval.status = 'EXECUTED';
     this.audit('Governor', 'APPROVED_ACTION_EXECUTED', approval.opportunityId, { approvalId, action: approval.action });
+
+    if (approval.action === 'SEND_OUTREACH' && opportunity.state === 'QUALIFIED') {
+      this.transition(approval.opportunityId, 'CONTACTED');
+    }
+    if (approval.action === 'SUBMIT_APPLICATION' && (opportunity.state === 'QUALIFIED' || opportunity.state === 'CONTACTED')) {
+      this.transition(approval.opportunityId, 'APPLIED');
+    }
+
     return approval.payload;
   }
 
