@@ -1,4 +1,4 @@
-import type { ApprovalRequest, PipelineState } from './domain.js';
+import type { ApprovalRequest, AuditEvent, PipelineState } from './domain.js';
 import { PIPELINE_STATES } from './domain.js';
 import { DeliveryLedger, type DeliveryEvent } from './delivery-ledger.js';
 import { Store } from './store.js';
@@ -15,18 +15,21 @@ const allowed: Record<PipelineState, PipelineState[]> = {
   OFFER: [], REJECTED: []
 };
 
+export type GovernorAuditSink = (event: AuditEvent) => void;
+
 export class Governor {
   readonly deliveries = new DeliveryLedger();
-  constructor(private readonly store: Store) {}
+  constructor(private readonly store: Store, private readonly eventSink?: GovernorAuditSink) {}
 
   transition(opportunityId: string, next: PipelineState) {
     if (!PIPELINE_STATES.includes(next)) throw new Error(`unknown state ${next}`);
     const opportunity = this.store.opportunities.get(opportunityId);
     if (!opportunity) throw new Error('opportunity not found');
     if (!allowed[opportunity.state].includes(next)) throw new Error(`illegal transition ${opportunity.state} -> ${next}`);
+    const previous = opportunity.state;
     opportunity.state = next;
     opportunity.updatedAt = new Date().toISOString();
-    this.audit('Governor', 'STATE_TRANSITION', opportunityId, { next });
+    this.audit('Governor', 'STATE_TRANSITION', opportunityId, { previous, next });
     return opportunity;
   }
 
@@ -68,7 +71,7 @@ export class Governor {
     const approval=this.store.approvals.get(approvalId);
     if(!approval||approval.status!=='EXECUTED')throw new Error('executed approval required before provider acknowledgement');
     if(!provider.trim()||!providerMessageId.trim())throw new Error('provider and providerMessageId required');
-    const event=this.deliveries.record({id:id('delivery'),actionId:approvalId,state:'provider-acknowledged',at:new Date().toISOString(),provider:provider.trim(),providerMessageId:providerMessageId.trim(),detail});
+    const event=this.deliveries.record({id:id('delivery'),actionId:approval.id,state:'provider-acknowledged',at:new Date().toISOString(),provider:provider.trim(),providerMessageId:providerMessageId.trim(),detail});
     this.audit('DeliveryVerifier','PROVIDER_ACKNOWLEDGED',approval.opportunityId,{approvalId,provider:event.provider,providerMessageId:event.providerMessageId});
     return event;
   }
@@ -76,6 +79,7 @@ export class Governor {
   verifyReceived(approvalId:string,provider:string,providerMessageId:string,detail?:string){
     const approval=this.store.approvals.get(approvalId);
     if(!approval||approval.status!=='EXECUTED')throw new Error('executed approval required before receipt verification');
+    if(!provider.trim()||!providerMessageId.trim())throw new Error('provider and providerMessageId required');
     const event=this.deliveries.record({id:id('delivery'),actionId:approvalId,state:'verified-received',at:new Date().toISOString(),provider:provider.trim(),providerMessageId:providerMessageId.trim(),detail});
     this.audit('DeliveryVerifier','DELIVERY_VERIFIED_RECEIVED',approval.opportunityId,{approvalId,provider:event.provider,providerMessageId:event.providerMessageId});
     return event;
@@ -91,6 +95,8 @@ export class Governor {
   }
 
   audit(actor: string, action: string, opportunityId: string | undefined, detail: Record<string, unknown>) {
-    return this.store.addAudit({ id: id('audit'), at: new Date().toISOString(), actor, action, opportunityId, detail });
+    const event = this.store.addAudit({ id: id('audit'), at: new Date().toISOString(), actor, action, opportunityId, detail });
+    this.eventSink?.(structuredClone(event));
+    return event;
   }
 }
