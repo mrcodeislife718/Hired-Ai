@@ -1,0 +1,35 @@
+name: Remove UI Placeholder Attributes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remove-ui-placeholder-attributes
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove remaining production placeholder attributes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/web-ui.ts')
+          text=p.read_text()
+          text=text.replace(' placeholder="Tell Maya what you want to change about your career..."','')
+          text=text.replace(' placeholder="Message Maya about your career..."','')
+          p.write_text(text)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/remove-ui-placeholders.yml
+          git add src/web-ui.ts
+          git commit -m "Remove production UI placeholder attributes"
+          git push
