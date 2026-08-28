@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MayaResumeStudio } from '../src/resume-studio.js';
-import { evidence } from '../src/seed.js';
+import { testEvidence } from './test-records.js';
 
 const studio = new MayaResumeStudio();
-const raw = `Professional Summary\nSoftware engineer building production systems.\nSkills: TypeScript, Node.js, Python\nGitHub: https://github.com/example\nEmail: person@example.com\nBuilt and launched reliable APIs in 2026.`;
+const evidence=testEvidence();
+const raw = `Professional Summary\nSoftware engineer building production systems.\nSkills: TypeScript, Node.js, Python\nPortfolio: https://test.invalid/work\nEmail: person@test.invalid\nBuilt and launched reliable APIs in 2026.`;
 
 test('free tier can create an ATS-safe professional resume package', () => {
   const pkg = studio.build({ access:'free', rawResumeText:raw, evidence, identity:'Software Engineer' });
