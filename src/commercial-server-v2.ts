@@ -3,6 +3,7 @@ import type { AccountRecord } from './accounts.js';
 import { BillingEventLedger } from './billing-ledger.js';
 import { CommercialPlatform } from './commercial-platform.js';
 import { checkoutReady, commercialPlans, hasPlan, planById, type PlanId } from './commercial.js';
+import type { ConnectorCapability } from './connector-fabric.js';
 import { EmployerPlatform, type EmployerRole } from './employer-platform.js';
 import { baseSecurityHeaders, clearSessionCookie, enforceOrigin, sessionCookie, sessionToken } from './http-security.js';
 import { MayaService, type MayaRequest } from './maya-service.js';
@@ -32,6 +33,7 @@ const employers = new EmployerPlatform();
 const billingLedger = new BillingEventLedger();
 const authLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_AUTH_RATE_LIMIT ?? 12), 15 * 60_000);
 const apiLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_API_RATE_LIMIT ?? 180), 60_000);
+const CONNECTOR_CAPABILITIES = new Set<ConnectorCapability>(['submit-application','send-outreach','send-email','create-calendar-event','read-opportunities','read-employer-intelligence','read-compensation','verify-credential']);
 
 function sendJson(res: ServerResponse, status: number, payload: unknown, extra: Record<string,string> = {}) {
   res.writeHead(status, { 'content-type':'application/json; charset=utf-8', ...baseSecurityHeaders, ...extra });
@@ -65,7 +67,7 @@ async function handleStripeWebhook(req:IncomingMessage,res:ServerResponse){const
 
 async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(req.url??'/','http://localhost');try{
   if(req.method==='GET'&&url.pathname==='/')return sendHtml(res,renderMayaPage());
-  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true,proactiveCareerOS:true}});
+  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true,proactiveCareerOS:true,connectorFabric:true}});
   if(req.method==='GET'&&url.pathname==='/api/plans')return sendJson(res,200,{plans:commercialPlans().map(({stripePriceId,...plan})=>({...plan,checkoutConfigured:Boolean(stripePriceId)})),billing:checkoutReady()});
   if(req.method==='POST'&&url.pathname==='/api/stripe/webhook')return handleStripeWebhook(req,res);
   if(req.method&&!['GET','HEAD','OPTIONS'].includes(req.method)&&!enforceOrigin(req,res))return;
@@ -139,7 +141,13 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   const outreach=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/outreach-request$/);if(outreach&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const result=engine.requestOutreach(outreach[1]);await runtime.checkpoint();return sendJson(res,201,result);}
   const transition=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/transition$/);if(transition&&req.method==='POST'){const body=await readJson<{state:PipelineState}>(req);const result=engine.governor.transition(transition[1],body.state);await runtime.checkpoint();return sendJson(res,200,result);}
   const feedback=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/feedback$/);if(feedback&&req.method==='POST'){const body=await readJson<Omit<FeedbackEvent,'opportunityId'>>(req);const result=engine.recordFeedback({...body,opportunityId:feedback[1]});await runtime.checkpoint();return sendJson(res,200,result);}
+  if(req.method==='GET'&&url.pathname==='/api/connectors'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,200,{connectors:runtime.connectors.available(),integrity:runtime.connectors.integrity()});}
+  if(req.method==='GET'&&url.pathname==='/api/connectors/operations'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,200,{operations:runtime.connectors.all(),deadLetters:runtime.connectors.deadLetters(),integrity:runtime.connectors.integrity()});}
+  const connectorRetry=url.pathname.match(/^\/api\/connectors\/operations\/([^/]+)\/retry$/);
+  if(connectorRetry&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const result=await runtime.retryConnectorOperation(connectorRetry[1]);return sendJson(res,200,{operation:result,confirmedReceived:result.state==='verified-received'});}
   const approve=url.pathname.match(/^\/api\/approvals\/([^/]+)\/approve$/);if(approve&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const result=engine.governor.approve(approve[1]);await runtime.checkpoint();return sendJson(res,200,result);}
+  const connectorDispatch=url.pathname.match(/^\/api\/approvals\/([^/]+)\/connector-dispatch$/);
+  if(connectorDispatch&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{connectorId?:string;capability?:string;maxAttempts?:number}>(req);const connectorId=String(body.connectorId??'').trim(),capability=String(body.capability??'') as ConnectorCapability;if(!connectorId)return sendJson(res,400,{error:'connectorId required'});if(!CONNECTOR_CAPABILITIES.has(capability))return sendJson(res,400,{error:'supported connector capability required'});const result=await runtime.dispatchApproved(connectorDispatch[1],connectorId,capability,body.maxAttempts);return sendJson(res,200,{operation:result,delivery:{state:engine.governor.deliveryState(connectorDispatch[1]),history:engine.governor.deliveryHistory(connectorDispatch[1])},confirmedReceived:result.state==='verified-received'});}
   const delivery=url.pathname.match(/^\/api\/approvals\/([^/]+)\/delivery$/);if(delivery&&req.method==='GET'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,200,{state:engine.governor.deliveryState(delivery[1]),history:engine.governor.deliveryHistory(delivery[1])});}
   const providerAck=url.pathname.match(/^\/api\/approvals\/([^/]+)\/provider-acknowledged$/);if(providerAck&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.providerAcknowledged(providerAck[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:false});}
   const verifiedReceipt=url.pathname.match(/^\/api\/approvals\/([^/]+)\/verified-received$/);if(verifiedReceipt&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.verifyReceived(verifiedReceipt[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:true});}
