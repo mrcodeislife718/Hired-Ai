@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HiredEngine } from '../src/engine.js';
-import { candidate, evidence } from '../src/seed.js';
-import { demoJobs } from '../src/demo-data.js';
+import { testCandidate, testEvidence, testJobs } from './test-records.js';
 
+const candidate=testCandidate();
+const evidence=testEvidence();
+const jobs=testJobs();
 const fresh = () => {
   const engine = new HiredEngine(candidate, evidence);
-  demoJobs.forEach(job => engine.ingest(job));
+  jobs.forEach(job => engine.ingest(job));
   return engine;
 };
 
@@ -44,7 +46,7 @@ test('career audit produces network and development actions rather than only job
 test('application request remains blocked when the user cannot credibly operate in the role', () => {
   const engine = new HiredEngine(candidate, evidence);
   const opportunity = engine.ingest({
-    ...demoJobs[0],
+    ...jobs[0],
     sourceId: 'readiness-block',
     requirements: ['C++', 'Rust', 'CUDA', 'Kubernetes']
   });
