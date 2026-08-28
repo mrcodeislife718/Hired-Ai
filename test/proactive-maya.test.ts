@@ -86,6 +86,18 @@ test('proactive Maya state and notification cooldown survive runtime restart',as
   assert.ok(restored.engine.careerState.events.verifyChain().valid);
 });
 
+test('repeated proactive notifications remain idempotent after cooldown',()=>{
+  const now=new Date('2026-08-28T12:00:00.000Z');
+  const engine=new HiredEngine(testCandidate(),testEvidence());
+  buildPlan(engine,now);
+  const first=engine.proactiveNotifications(now,1);
+  assert.equal(first.length,1);
+  const second=engine.proactiveNotifications(addDays(now,2),1);
+  assert.equal(second.length,1);
+  assert.equal(second[0].id,first[0].id);
+  assert.ok(engine.careerState.events.verifyChain().valid);
+});
+
 test('acknowledged proactive attention does not keep interrupting the user',()=>{
   const now=new Date('2026-08-28T12:00:00.000Z');
   const engine=new HiredEngine(testCandidate(),testEvidence());
