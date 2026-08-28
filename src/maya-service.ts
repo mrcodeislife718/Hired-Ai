@@ -174,16 +174,17 @@ export class MayaService {
     const history=await this.conversations.recent(accountId,16);
     const workflow=buildMayaWorkflowState(engine,input,{type:result.type});
     const longTermMemory=await this.longTermMemory.retrieve(accountId,userMessage||String(result.type??'career'),12);
+    const proactiveAttention=engine.proactiveNotifications(new Date(),3);
 
     const rendered=this.language.configured?await executeReliably({
       operation:'maya.language.render',retries:1,ledger:this.reliability,
-      primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,longTermMemory,result:{...result,message:undefined},workflow}}),
+      primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,longTermMemory,proactiveAttention,result:{...result,message:undefined},workflow}}),
       fallback:async()=>result.message,
       verify:value=>typeof value==='string'&&value.trim().length>0
     }):result.message;
     if(!this.language.configured)this.reliability.record({operation:'maya.deterministic.render',startedAt:Date.now(),finishedAt:Date.now(),success:true,modelCalls:0});
-    await this.conversations.append(accountId,'assistant',rendered,{type:result.type,workflowKind:workflow.kind,currentStep:workflow.currentStep});
-    return {...result,message:rendered,workflow,longTermMemory,languageModel:this.language.configured?'configured-with-verified-fallback':'deterministic-engine',reliability:this.reliability.snapshot()};
+    await this.conversations.append(accountId,'assistant',rendered,{type:result.type,workflowKind:workflow.kind,currentStep:workflow.currentStep,proactiveAttentionCount:proactiveAttention.length});
+    return {...result,message:rendered,workflow,longTermMemory,proactiveAttention,languageModel:this.language.configured?'configured-with-verified-fallback':'deterministic-engine',reliability:this.reliability.snapshot()};
   }
 
   history(accountId:string,limit=40){return this.conversations.recent(accountId,limit)}
