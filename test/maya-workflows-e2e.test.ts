@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HiredEngine } from '../src/engine.js';
-import { deterministicMayaReply, type MayaResponse } from '../src/maya-service.js';
+import { deterministicMayaReply, MayaService, type MayaResponse } from '../src/maya-service.js';
 import { buildMayaWorkflowState, type WorkflowRequestContext } from '../src/maya-workflows.js';
 import { testCandidate, testEvidence, testJobs } from './test-records.js';
 
@@ -38,21 +38,39 @@ test('Maya career lifecycle routes produce explicit end-to-end workflow state',(
     assert.ok(workflow.steps.length>0);
     assert.ok(workflow.completionDefinition.length>20);
     assert.ok(workflow.invariants.some(rule=>/authorization/i.test(rule)));
+    assert.ok(workflow.invariants.some(rule=>/receipt/i.test(rule)));
   }
 });
 
-test('approved outreach advances the opportunity to CONTACTED',()=>{
+test('Maya service returns workflow state with every conversational response',async()=>{
+  const {engine,opportunity}=engineWithOpportunity();
+  const maya=new MayaService();
+  const response=await maya.respond('workflow-test-account',engine,{message:'Apply to this role',opportunityId:opportunity.id});
+  const workflow=response.workflow as {kind?:string;endToEnd?:boolean;currentStep?:string};
+  assert.equal(workflow.kind,'application');
+  assert.equal(workflow.endToEnd,true);
+  assert.equal(workflow.currentStep,'approval');
+  await maya.close();
+});
+
+test('approved outreach advances the opportunity to CONTACTED while receipt remains independently verifiable',()=>{
   const {engine,opportunity}=engineWithOpportunity();
   assert.equal(opportunity.state,'QUALIFIED');
   const approval=engine.requestOutreach(opportunity.id);
-  assert.equal(approval.status,'PENDING');
+  assert.equal(engine.governor.deliveryState(approval.id),'prepared');
   engine.governor.approve(approval.id);
+  assert.equal(engine.governor.deliveryState(approval.id),'approved');
   engine.governor.executeApproved(approval.id);
   assert.equal(engine.store.opportunities.get(opportunity.id)?.state,'CONTACTED');
   assert.equal(engine.store.approvals.get(approval.id)?.status,'EXECUTED');
+  assert.equal(engine.governor.deliveryState(approval.id),'dispatched');
+  engine.governor.providerAcknowledged(approval.id,'test-provider','msg-outreach');
+  assert.equal(engine.governor.deliveryState(approval.id),'provider-acknowledged');
+  engine.governor.verifyReceived(approval.id,'test-provider','msg-outreach');
+  assert.equal(engine.governor.deliveryState(approval.id),'verified-received');
 });
 
-test('approved application advances the opportunity to APPLIED and closes the internal submission workflow',()=>{
+test('application workflow does not claim completion before verified receipt and recorded outcome',()=>{
   const {engine,opportunity}=engineWithOpportunity();
   const request={message:'Apply to this role',opportunityId:opportunity.id};
   const reply=deterministicMayaReply(engine,request);
@@ -63,18 +81,35 @@ test('approved application advances the opportunity to APPLIED and closes the in
 
   const approval=engine.requestApplication(opportunity.id);
   const pending=workflowFor(engine,request,reply);
-  assert.equal(pending.steps.find(step=>step.id==='approval')?.status,'complete');
+  assert.equal(pending.steps.find(step=>step.id==='approval')?.status,'ready');
+  assert.equal(pending.currentStep,'approval');
 
   engine.governor.approve(approval.id);
+  const authorized=workflowFor(engine,request,reply);
+  assert.equal(authorized.steps.find(step=>step.id==='approval')?.status,'complete');
+  assert.equal(authorized.steps.find(step=>step.id==='dispatch')?.status,'ready');
+
   engine.governor.executeApproved(approval.id);
   assert.equal(engine.store.opportunities.get(opportunity.id)?.state,'APPLIED');
-  assert.equal(engine.store.approvals.get(approval.id)?.status,'EXECUTED');
+  const dispatched=workflowFor(engine,request,reply);
+  assert.equal(dispatched.steps.find(step=>step.id==='dispatch')?.status,'complete');
+  assert.equal(dispatched.steps.find(step=>step.id==='receipt')?.status,'ready');
+  assert.equal(dispatched.complete,false);
 
-  engine.recordCareerOutcome({
-    id:'career-outcome-application',candidateId:engine.profile.id,opportunityId:opportunity.id,checkpoint:'application',at:new Date().toISOString()
-  });
+  engine.governor.providerAcknowledged(approval.id,'test-provider','msg-application');
+  const acknowledged=workflowFor(engine,request,reply);
+  assert.equal(acknowledged.steps.find(step=>step.id==='receipt')?.status,'ready');
+  assert.equal(acknowledged.complete,false);
+
+  engine.governor.verifyReceived(approval.id,'test-provider','msg-application');
+  const received=workflowFor(engine,request,reply);
+  assert.equal(received.steps.find(step=>step.id==='receipt')?.status,'complete');
+  assert.equal(received.steps.find(step=>step.id==='learn')?.status,'ready');
+
+  engine.recordCareerOutcome({id:'career-outcome-application',candidateId:engine.profile.id,opportunityId:opportunity.id,checkpoint:'application',at:new Date().toISOString()});
   const after=workflowFor(engine,request,reply);
   assert.equal(after.steps.find(step=>step.id==='learn')?.status,'complete');
+  assert.equal(after.complete,true);
 });
 
 test('application questions remain bound to the same selected opportunity and evidence package',()=>{
