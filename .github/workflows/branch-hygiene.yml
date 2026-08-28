@@ -1,0 +1,64 @@
+name: Branch Hygiene
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: branch-hygiene
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Remove branches that are already represented by main
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches="$(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name')"
+          merged_heads="$(gh api --paginate "repos/$REPO/pulls?state=closed&per_page=100" --jq '.[] | select(.merged_at != null) | .head.ref' | sort -u)"
+
+          delete_ref() {
+            local branch="$1"
+            local encoded
+            encoded="$(python - "$branch" <<'PY'
+          import sys, urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe=''))
+          PY
+            )"
+            echo "Deleting obsolete branch: $branch"
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" || true
+          }
+
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+            [ "$branch" = "main" ] && continue
+
+            if [ "$branch" = "temp-do-not-use" ] || [ "$branch" = "x" ]; then
+              delete_ref "$branch"
+              continue
+            fi
+
+            if printf '%s\n' "$merged_heads" | grep -Fxq "$branch"; then
+              delete_ref "$branch"
+              continue
+            fi
+
+            compare="$(gh api "repos/$REPO/compare/main...$branch")"
+            ahead="$(printf '%s' "$compare" | jq -r '.ahead_by')"
+            if [ "$ahead" = "0" ]; then
+              delete_ref "$branch"
+            fi
+          done <<< "$branches"
