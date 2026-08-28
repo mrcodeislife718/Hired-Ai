@@ -6,6 +6,7 @@ import type { CareerOutcomeEvent } from './career-outcomes.js';
 import type { CareerStateCoordinatorSnapshot } from './career-state-coordinator.js';
 import type { CareerPlanSnapshot } from './goal-plan-execution.js';
 import type { ProactiveMayaSnapshot } from './proactive-maya.js';
+import type { ConnectorFabricSnapshot } from './connector-fabric.js';
 import type { DeliveryEvent } from './delivery-ledger.js';
 import type { OpportunityWatchRule, SavedOpportunity } from './saved-opportunities.js';
 
@@ -23,6 +24,7 @@ export interface StoreSnapshot {
   careerState?: CareerStateCoordinatorSnapshot;
   careerPlans?: CareerPlanSnapshot;
   proactiveMaya?: ProactiveMayaSnapshot;
+  connectorFabric?: ConnectorFabricSnapshot;
 }
 
 export interface PersistenceAdapter { load():Promise<StoreSnapshot|undefined>; save(snapshot:StoreSnapshot):Promise<void>; delete?():Promise<void>; close?():Promise<void>; }
