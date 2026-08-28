@@ -1,6 +1,7 @@
 import type { HiredEngine } from './engine.js';
 import { ConversationStore } from './conversations.js';
 import { MayaLanguageModel } from './maya-language.js';
+import { MayaLongTermMemoryStore } from './maya-long-term-memory.js';
 import { ReliabilityEfficiencyLedger, executeReliably } from './reliability-efficiency.js';
 import { buildCareerAdvantagePlan, type FunnelObservation } from './career-advantage.js';
 import { buildUniversalPlanFromEngine } from './maya-universal-engine-adapter.js';
@@ -156,19 +157,39 @@ export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):May
 }
 
 export class MayaService {
-  constructor(private readonly conversations=new ConversationStore(),private readonly language=new MayaLanguageModel(),private readonly reliability=new ReliabilityEfficiencyLedger()){}
+  constructor(
+    private readonly conversations=new ConversationStore(),
+    private readonly language=new MayaLanguageModel(),
+    private readonly reliability=new ReliabilityEfficiencyLedger(),
+    private readonly longTermMemory=new MayaLongTermMemoryStore()
+  ){}
+
   async respond(accountId:string,engine:HiredEngine,input:MayaRequest):Promise<MayaResponse>{
     const userMessage=String(input.message??'').trim()||(input.resumeText?'Please review the resume I attached.':'');
-    if(userMessage)await this.conversations.append(accountId,'user',userMessage,{opportunityId:input.opportunityId});
-    const result=deterministicMayaReply(engine,input);const history=await this.conversations.recent(accountId,16);
+    let userRecord;
+    if(userMessage) userRecord=await this.conversations.append(accountId,'user',userMessage,{opportunityId:input.opportunityId});
+    if(userMessage) await this.longTermMemory.observeUserMessage(accountId,userMessage,userRecord?.id,input.opportunityId);
+
+    const result=deterministicMayaReply(engine,input);
+    const history=await this.conversations.recent(accountId,16);
     const workflow=buildMayaWorkflowState(engine,input,{type:result.type});
-    const rendered=this.language.configured?await executeReliably({operation:'maya.language.render',retries:1,ledger:this.reliability,primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,result:{...result,message:undefined},workflow}}),fallback:async()=>result.message,verify:value=>typeof value==='string'&&value.trim().length>0}):result.message;
+    const longTermMemory=await this.longTermMemory.retrieve(accountId,userMessage||String(result.type??'career'),12);
+
+    const rendered=this.language.configured?await executeReliably({
+      operation:'maya.language.render',retries:1,ledger:this.reliability,
+      primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,longTermMemory,result:{...result,message:undefined},workflow}}),
+      fallback:async()=>result.message,
+      verify:value=>typeof value==='string'&&value.trim().length>0
+    }):result.message;
     if(!this.language.configured)this.reliability.record({operation:'maya.deterministic.render',startedAt:Date.now(),finishedAt:Date.now(),success:true,modelCalls:0});
     await this.conversations.append(accountId,'assistant',rendered,{type:result.type,workflowKind:workflow.kind,currentStep:workflow.currentStep});
-    return {...result,message:rendered,workflow,languageModel:this.language.configured?'configured-with-verified-fallback':'deterministic-engine',reliability:this.reliability.snapshot()};
+    return {...result,message:rendered,workflow,longTermMemory,languageModel:this.language.configured?'configured-with-verified-fallback':'deterministic-engine',reliability:this.reliability.snapshot()};
   }
+
   history(accountId:string,limit=40){return this.conversations.recent(accountId,limit)}
+  memories(accountId:string){return this.longTermMemory.list(accountId)}
+  forgetMemory(accountId:string,query:string){return this.longTermMemory.forgetMatching(accountId,query)}
   clearHistory(accountId:string){return this.conversations.clear(accountId)}
   reliabilitySnapshot(){return this.reliability.snapshot()}
-  close(){return this.conversations.close()}
+  async close(){await Promise.all([this.conversations.close(),this.longTermMemory.close()])}
 }
