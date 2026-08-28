@@ -18,7 +18,7 @@ export function renderMayaPage() {
     <h1>Your career, handled as a conversation.</h1>
     <p>Maya helps you start, change direction, find work, prove what you can do, prepare for interviews, negotiate, and advance. She adapts to the profession and uses the evidence that actually matters in that field.</p>
     <div class="publicComposer">
-      <textarea id="publicPrompt" aria-label="Tell Maya what you want from your career" placeholder="Tell Maya what you want to change about your career..."></textarea>
+      <textarea id="publicPrompt" aria-label="Tell Maya what you want from your career"></textarea>
       <div class="publicActions"><span style="color:var(--muted);font-size:12px">No dashboard. Just tell Maya the outcome.</span><button class="primary" onclick="beginFromPublic()">Start with Maya</button></div>
     </div>
     <div class="promptRow">
@@ -46,7 +46,7 @@ export function renderMayaPage() {
     <div id="thread" class="thread"></div>
     <div class="composerWrap">
       <div class="composer">
-        <textarea id="composer" aria-label="Message Maya" placeholder="Message Maya about your career..."></textarea>
+        <textarea id="composer" aria-label="Message Maya"></textarea>
         <div class="composerTools"><div class="leftTools"><button class="tool" onclick="toggleTools()" title="Add career material">＋</button></div><button id="sendBtn" class="send" onclick="sendCurrent()">↑</button></div>
       </div>
       <div class="disclaimer">Maya can make mistakes. Verify consequential employment, legal, licensing, compensation, and employer information.</div>
