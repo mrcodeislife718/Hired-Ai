@@ -1,228 +1,198 @@
 # Hired AI
 
-**Hired AI is an AI Career Operating System built to help people build stronger careers — not merely find their next job.**
+**Hired AI is a conversational Career Operating System built to help people start, transition, win, and advance in their careers.**
 
-Getting hired is the first high-value transaction. Career advancement is the long-term relationship.
+Getting hired is one important transaction. Building a durable, better-paid, more fulfilling career is the longer relationship.
 
 ## Meet Maya
 
-**Maya is the personal AI career agent inside Hired AI.**
+**Maya is the AI career agent inside Hired AI.** The customer should not have to operate recruiting software, navigate feature dashboards, or coordinate separate career tools. They talk or type to Maya, and Maya coordinates the system on their behalf.
 
-Hired AI is the platform and career operating system. **Maya is the friendly, highly capable agent the customer talks to.** Users should not have to operate recruiting software, understand internal agents, or manually coordinate a collection of career tools. They talk or type to Maya, and Maya coordinates the system on their behalf.
-
-> **Product principle:** the user should manage their career by talking to Maya — not by operating recruiting software.
-
-Maya is designed to become a long-term career relationship rather than a one-search assistant. She should know the user's career record, verified capabilities, goals, constraints, professional presence, relationships, active opportunities, hiring history, development gaps, and measured outcomes, subject to the user's privacy and authorization controls.
-
-The intended experience is natural:
-
-```text
-Maya, find me roles I can realistically win.
-Maya, why am I getting rejected?
-Maya, help me get to $150K.
-Maya, who should I know in this industry?
-Maya, improve my LinkedIn and GitHub positioning.
-Maya, my resume is outdated. Fix it from my current career evidence.
-Maya, prepare me for tomorrow's interview.
-Maya, help me negotiate this offer.
-Maya, keep my network warm.
-Maya, what should I do next?
-```
-
-Maya should be warm, encouraging, concise when speed matters, detailed when decisions matter, proactive without becoming intrusive, truthful about weaknesses, respectful of the user's professional identity, and relentlessly focused on improving real career outcomes.
+> **Product principle:** manage the career by talking to Maya, not by operating recruiting software.
 
 The customer-facing identity is simply:
 
 > **Maya — Your AI Career Agent**
 
-The name is treated as a human-facing identity, not a forced acronym. Any future acronym or expanded brand meaning must remain secondary to the natural relationship: **"I'll ask Maya."**
+Maya is designed to support the full career lifecycle across professions and industries. She can help someone enter the workforce, reenter after a break, change fields, find and evaluate opportunities, prove capability, improve professional positioning, prepare applications, build useful professional relationships, practice for interviews and assessments, negotiate offers, pursue promotions or internal mobility, improve compensation, and preserve long-term career options.
 
-## The category
-
-**AI Career Agent / AI Career Operating System**
-
-Hired AI is intentionally broader than a job board, application tracker, resume tool, auto-apply agent, or career coach.
-
-The competitive surface spans job boards and search products, career-management products, job-application agents, recruiters and career coaches, and professional-network development tools. The goal is not to copy each product. The goal is to absorb their useful functions into one increasingly capable career relationship coordinated by Maya.
+The intended experience is natural:
 
 ```text
-Job board
-"Here are 300 jobs."
-
-Recommendation system
-"Here are 30 jobs you might like."
-
-Application agent
-"I can apply to those jobs."
-
-Maya
-"Only five of those jobs are worth your time. Four are strongly supported by your evidence. I found useful human paths into three companies. One role could materially advance your career. I prepared the strongest application, and here is the one gap most likely to hurt you in the interview."
+Maya, help me start my career.
+Maya, I want to change industries. What actually transfers?
+Maya, find roles I can realistically win.
+Maya, why am I getting rejected?
+Maya, what proof am I missing?
+Maya, fix my resume from my current career evidence.
+Maya, prepare me for this interview.
+Maya, help me negotiate this offer.
+Maya, help me get promoted and earn more.
+Maya, what should I do next?
 ```
 
-The behavioral target is:
+## Universal career intelligence
 
-> **"I'll ask Maya."**
+Hired AI does **not** assume software, engineering, technology, office work, or any other single profession is the default. Healthcare, skilled trades, education, retail, hospitality, finance, public service, logistics, manufacturing, creative work, sales, legal, scientific, technical, and other careers are first-class contexts.
 
-Job boards, ATS systems, company career pages, professional networks, GitHub, authorized social/career sources, and recruiting data can become inputs into Hired AI rather than separate products the user must operate independently.
+Maya uses the proof appropriate to the profession, including employment history, licenses, certifications, education, references, assessments, work samples, operational records, publications, awards, portfolios, customer outcomes, volunteer work, projects, or other legitimate evidence. GitHub can be useful when it is relevant; it is not a universal requirement.
 
-## Six connected intelligence layers
+Legally or professionally required credentials remain hard gates. Strong positioning cannot substitute for a required license, clearance, certification, registration, authorization, or other mandatory qualification.
 
-Maya coordinates six connected systems invisibly.
+## Conversation-first product surface
 
-### 1. Opportunity Intelligence
+The primary product surface is one persistent Maya conversation. Career capabilities appear inside that conversation as context, evidence, choices, follow-up actions, and generated artifacts rather than separate dashboard workflows.
 
-Turn a noisy employment market into a small set of opportunities worth the user's time. Hired AI aggregates authorized sources, normalizes postings, removes duplicates, enforces constraints, evaluates realistic fit, and ranks by expected career value rather than application volume.
+The web experience provides:
 
-### 2. Career Intelligence
+- a ChatGPT-style conversation thread
+- persistent conversation history
+- conversational resume intake and review
+- inline opportunity comparisons and explanations
+- conversational career-health, transition, reentry, and advancement planning
+- conversational interview, application, employer, networking, and negotiation support
+- explicit authorization before identity-bearing external actions
 
-Maintain a living model of the user's actual career position and desired trajectory: skills, verified evidence, experience, projects, credentials, compensation, aspirations, constraints, strengths, weaknesses, demonstrated versus claimed capability, market positioning, and career trajectory.
+The architecture may contain many specialized engines. The user should experience one coordinated career agent.
 
-### 3. Relationship Intelligence
+## Career Advantage
 
-Help users deliberately build and maintain professional relationships with recruiters, hiring managers, employees, peers, founders, mentors, former colleagues, communities, referral paths, and useful introductions. The goal is a durable professional network, not spam automation.
+Maya optimizes for **durable career mobility**, not application volume.
 
-### 4. Acquisition Agent
+The Career Advantage layer helps answer five larger questions:
 
-Turn qualified opportunities into hiring conversations and offers through evidence-grounded resume preparation, truthful tailoring, candidate packages, human paths, outreach preparation, follow-up, interview preparation, offer comparison, negotiation preparation, duplicate prevention, and governed external actions.
+1. **How do I get started?** Identify realistic entry paths, mandatory gates, transferable proof, and the smallest evidence actions that expand access.
+2. **How do I transition?** Separate transferable capabilities from true gaps, translate prior work into the target profession's language, and preserve existing career capital.
+3. **How do I win the next opportunity?** Rank opportunities by realistic readiness, expected career value, evidence strength, timing, competition, compensation, and conversion probability.
+4. **How do I advance?** Build next-level evidence, promotion cases, internal-mobility options, leadership proof, compensation leverage, and external alternatives.
+5. **How do I stay resilient?** Keep evidence current, relationships healthy, bargaining power visible, and more than one credible career path available.
 
-Consequential actions follow:
+Maya can also diagnose which stage of a job-search funnel is failing before changing strategy. Weak application-to-screen conversion should not trigger the same intervention as strong screening conversion followed by weak interview performance.
+
+## Strongest-defensible candidate advocacy
+
+Maya's job is to present the user as the strongest credible candidate the evidence supports.
+
+She may improve ordering, emphasis, clarity, professional language, qualitative impact, transferable framing, adjacent-capability framing, and the strength of rhetoric when the underlying evidence supports it. Evidence-limited claims remain labeled and defensible.
+
+She may not invent employers, titles, dates, credentials, tools, licenses, ownership, scope, production status, metrics, revenue, user counts, completed outcomes, or experience that did not occur.
+
+The optimization target is:
+
+> **maximize the probability that the right employer correctly recognizes the candidate's maximum defensible value.**
+
+## Connected intelligence
+
+Maya coordinates several connected systems invisibly:
+
+### Opportunity Intelligence
+Normalizes and evaluates authorized job sources, removes duplicates, enforces constraints, verifies freshness, and ranks opportunities by career value rather than volume.
+
+### Career Intelligence
+Maintains a living model of goals, constraints, capabilities, evidence, preferences, compensation, trajectory, readiness, and uncertainty.
+
+### Evidence & Positioning Intelligence
+Decomposes role requirements, distinguishes hard gates from preferences, synthesizes multiple proof signals, predicts objections, models likely competitors, and compiles strongest-defensible positioning from attributable evidence.
+
+### Relationship Intelligence
+Builds durable professional relationship paths across recruiters, hiring managers, peers, mentors, former colleagues, associations, communities, customers, alumni, referrals, and other profession-appropriate networks.
+
+### Acquisition Intelligence
+Compiles consistent resumes, application answers, outreach, proof indexes, follow-ups, and interview narratives from one evidence package so material facts do not drift between surfaces.
+
+### Career Development
+Identifies the smallest high-value intervention that expands access: evidence, experience, credential, work sample, assessment, relationship, interview capability, or other profession-appropriate proof.
+
+### Advancement & Negotiation
+Supports promotion evidence, internal mobility, next-level scope, leadership progression, total-compensation analysis, negotiation, and external leverage.
+
+### Outcome Learning
+Learns from applications, screens, interviews, assessments, work trials, rejections, offers, compensation, relationships, time-to-response, post-hire satisfaction, advancement, and retention without overfitting sparse data.
+
+## Application intelligence stack
+
+For a specific opportunity Maya can coordinate:
 
 ```text
-prepare -> request authorization -> user approval -> execute -> audit
+role description
+      ↓
+requirement decomposition
+      ↓
+core hiring problem + hard gates
+      ↓
+evidence synthesis graph
+      ↓
+immutable application evidence package
+      ↓
+strongest-defensible positioning
+      ↓
+employer decision model + likely objections
+      ↓
+role-specific proof portfolio
+      ↓
+resume / answers / outreach / interview narrative
+      ↓
+application + follow-up
+      ↓
+outcome measurement
+      ↓
+calibrated strategy learning
 ```
 
-### 5. Career Development Agent
+The same material facts compile into every artifact. Wording can adapt to the audience; evidence cannot contradict itself.
 
-Identify and close the gaps preventing the user from reaching better opportunities. Maya should be able to explain the smallest credible intervention that materially expands opportunity access: a skill, proof project, portfolio improvement, credential, interview weakness, positioning change, relationship goal, or experience gap.
+## Selective pursuit and readiness
 
-### 6. Outcome Learning
-
-Learn from applications, responses, no-responses, recruiter screens, technical interviews, onsites, offers, compensation, outreach, referrals, relationships, time-to-interview, and time-to-offer. Strategy should adapt from measured conversion while truthfulness, authorization, and consequential controls remain deterministic.
-
-The long-term moat is increasingly understanding **the person + their evidence + the market + their relationships + their history + what strategies actually convert for that individual.**
-
-## Career presence and network growth
-
-Maya treats the user's professional presence as part of the career system rather than a separate chore.
-
-With user authorization, Hired AI can reason across career evidence such as resumes, GitHub, professional profiles, social presence, projects, and interaction history to help users:
-
-- improve professional positioning
-- surface stronger verified work
-- identify missing proof
-- strengthen GitHub presentation
-- improve professional social profiles
-- identify relevant people and communities
-- plan thoughtful outreach
-- maintain relationships
-- discover referrals and introductions
-- align public presence with target roles
-
-Maya should never turn networking into indiscriminate automated messaging.
-
-## Resume modernization
-
-An outdated resume should not force the user to manually reconstruct their career.
-
-Hired AI can detect stale signals, missing current skills, missing verified portfolio evidence, weak outcome framing, and positioning that no longer reflects the user's actual capability. Maya can then guide or generate a truthful modernization plan grounded in the user's current career record and target opportunities.
-
-The system should maintain a durable master career record so future resumes can be regenerated and tailored from current evidence instead of repeatedly editing an obsolete document.
-
-## Selective job pursuit and role readiness
-
-Hired AI does not optimize for the largest number of applications.
-
-Before recommending or requesting an application, the system evaluates whether the user can credibly occupy and operate within the role. Opportunities can be treated as:
+Hired AI does not optimize for sending the largest number of applications. Opportunities can be treated as:
 
 - **pursue** — sufficiently ready and strategically worthwhile
-- **develop-first** — promising, but a material capability/evidence gap should be closed first
-- **skip** — poor fit, low career value, or incompatible with constraints
+- **develop-first** — promising, but a material readiness or evidence gap should be closed or validated first
+- **skip** — incompatible, weak-value, stale, or outside constraints
 
-Maya should explain these decisions rather than hiding them behind a score.
-
-## Interview and offer support
-
-Maya can prepare role-specific interview guidance from the actual job requirements, company intelligence, the user's evidence, and known gaps. The longer-term system should support mock interviews, technical and behavioral preparation, post-interview learning, offer comparison, compensation context, and negotiation preparation.
-
-## How the system fits together
-
-```text
-                     USER
-              voice / text / files
-                       |
-                       v
-                     MAYA
-             Personal AI Career Agent
-                       |
-          intent + persistent career context
-                       |
-        +--------------+--------------+
-        |              |              |
-        v              v              v
- Opportunity      Career        Relationship
- Intelligence   Intelligence    Intelligence
-        |              |              |
-        +--------------+--------------+
-                       |
-                       v
-              Acquisition Agent
-                       |
-            Governor / authorization
-                       |
-                       v
-             External career actions
-                       |
-                       v
-        Applications / people / interviews
-                       |
-           +-----------+-----------+
-           |                       |
-           v                       v
- Career Development          Outcome Learning
-           |                       |
-           +-----------+-----------+
-                       |
-                       v
-             Updated career strategy
-                       |
-                       +-----> Maya continues the conversation
-```
-
-## Current implementation foundation
-
-The repository contains foundations that map directly into the architecture:
-
-- `ScoutAgent` and discovery adapters -> Opportunity Intelligence
-- `QualificationAgent`, `EvidenceAgent`, candidate constraints, explainable scoring, and role-readiness gating -> Career Intelligence
-- `RecruiterAgent`, sourced `HumanPath` records, career-presence and network planning -> Relationship Intelligence
-- `ResumeAgent`, `OutreachAgent`, `ApplicationAgent`, `FollowUpAgent`, and `InterviewAgent` -> Acquisition
-- resume modernization, evidence gaps, readiness analysis, and interview gap drills -> Career Development
-- `CareerStrategist` and feedback events -> Outcome Learning
-- `CareerOperatingSystem` -> cross-layer career orchestration
-- `Governor` -> authorization boundary for consequential actions
-
-Infrastructure includes PostgreSQL persistence when configured, atomic local checkpoints otherwise, automatic checkpointing, audit events, traces, bounded retries and circuit breakers, Greenhouse and Lever discovery, authorized JSON-feed ingestion, GitHub portfolio evidence indexing, resume-text ingestion, model-provider abstraction, deterministic tests, and Node 22/24 CI.
+Maya explains the decision, preserves uncertainty, and distinguishes true requirements from employer wish lists.
 
 ## Governed autonomy
 
 Conversation is the customer interface, not the authority boundary.
 
-Models may interpret language and support reasoning, while authorization, durable state, evidence truth, consequential execution, and audit truth remain outside the model boundary. The user can delegate substantial work without giving a model unrestricted authority over their professional identity.
+Models may interpret language and support reasoning. Deterministic systems retain ownership of authorization, durable state, evidence truth, consequential execution, billing truth, audit events, and external-action confirmation.
 
-## Product doctrine
+Identity-bearing actions follow:
 
-1. **Maya is the primary customer interface.**
-2. **The user should be able to manage their career conversationally.**
-3. **The AI should do operational work instead of transferring that work to the user.**
-4. **Models may interpret intent; deterministic systems own consequential controls.**
-5. **Qualification claims should be tied to evidence whenever possible.**
-6. **External identity-bearing actions require appropriate authorization.**
-7. **Career value matters more than application volume.**
-8. **Professional relationships are durable assets, not disposable application channels.**
-9. **Failures, rejections, no-responses, referrals, and offers are learning evidence.**
-10. **Important recommendations must be explainable.**
-11. **Automation must not become spam, deception, or fabricated qualification.**
-12. **Success means materially improving employment and career outcomes.**
+```text
+prepare → request authorization → user approval → execute → verify → audit
+```
+
+The system does not claim an external action succeeded until it has evidence of receipt or completion.
+
+## Reliability and learning
+
+Maya is designed to fail closed around consequential actions and to avoid learning the wrong lesson from small samples. The product uses bounded retries, reliability tracking, source freshness, duplicate prevention, evidence provenance, confidence, explicit unknowns, and calibration controls.
+
+A more aggressive application variant does not become preferred merely because it produced a response. Materially false claims remain prohibited regardless of conversion.
+
+## Commercial and employer capabilities
+
+Hired AI includes candidate and employer-side foundations for accounts, subscriptions, organization permissions, candidate-consent controls, employer role management, sourcing, screening, hiring collaboration, and post-hire outcomes. Candidate visibility and identity-bearing actions remain permissioned.
+
+## Current implementation foundation
+
+The repository includes:
+
+- TypeScript career and acquisition engines
+- Maya conversational service with deterministic fallback
+- cross-industry universal career intelligence
+- Career Twin and durable career outcomes
+- opportunity discovery, reliability, scoring, readiness, and saved watches
+- evidence-backed positioning and application compilation
+- profession-neutral interview and application-question intelligence
+- employer-quality and mutual-fit logic
+- governed external actions
+- PostgreSQL persistence when configured, with local durable storage where supported
+- Stripe subscription and webhook verification
+- tenant-isolated accounts, sessions, and conversation history
+- Node 22/24 CI
+- a production-integrity gate that rejects production fixture files, unfinished implementation markers, hard-coded candidate fixtures, and regression to dashboard-style primary UI
 
 ## Run locally
 
@@ -240,7 +210,7 @@ Open:
 http://localhost:3000
 ```
 
-Demo opportunities load automatically unless `HIRED_DEMO=false`.
+No production demo candidate or demo opportunity dataset is loaded. Real account state and explicitly configured opportunity/evidence sources drive the product.
 
 ## Optional environment
 
@@ -254,30 +224,40 @@ LEVER_COMPANIES=...
 JOB_JSON_FEEDS=...
 ```
 
+GitHub configuration is optional and should be used only when GitHub is relevant evidence for the user's career context.
+
 ## Verification
 
 ```bash
 npm run check
 ```
 
-The repository includes deterministic tests and Node 22/24 CI configuration.
+The check path builds TypeScript, runs the test suite, and executes the production-integrity gate. CI runs supported Node versions and the repository also maintains a portfolio-proof gate.
 
-## Documentation
+## Product doctrine
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/API.md`](docs/API.md)
-- [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- [`PORTFOLIO_PROOF.md`](PORTFOLIO_PROOF.md)
+1. Maya is the primary customer interface.
+2. Every customer-facing career capability should be usable conversationally.
+3. Treat every profession and industry as first-class.
+4. Optimize for durable career outcomes, not engagement or application volume.
+5. Advocate for the candidate as strongly as the evidence defensibly allows.
+6. Never replace a mandatory credential with positioning.
+7. Compile material claims from attributable evidence and preserve consistency across artifacts.
+8. Diagnose the failing career or hiring stage before changing strategy.
+9. Prefer the smallest high-value proof action over generic skill accumulation.
+10. Professional relationships are durable career assets, not spam channels.
+11. External identity-bearing actions require authorization and verified execution.
+12. Important recommendations must be explainable and uncertainty must remain visible.
+13. Learn from real outcomes without overfitting sparse samples.
+14. Payment may buy service, never distort organic fit ranking or truth.
+15. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention, and long-term optionality.
 
 ## Commercial proof standard
 
-Hired AI should not claim superiority from architecture alone. The product should measure qualified-opportunity precision, useful professional relationships created, recruiter/hiring-manager conversations, application-to-screen conversion, interview conversion, offer conversion, compensation improvement, time-to-interview, time-to-offer, user time saved, and retention beyond a single job search.
+Hired AI should not claim technical superiority from architecture alone. It should earn that claim through measured results: opportunity precision, useful relationship creation, application-to-screen conversion, interview conversion, offer conversion, time-to-interview, time-to-offer, compensation improvement, career-transition success, promotion outcomes, user time saved, post-hire satisfaction, retention, and long-term career mobility.
 
 ## Canonical direction
 
-**Hired AI helps people build stronger careers. Maya is the personal AI career agent through which they do it.**
+**Hired AI helps people build stronger careers. Maya is the conversational AI career agent through which they do it.**
 
-Getting hired is the first high-value transaction. Career advancement is the long-term relationship.
-
-Future features should strengthen Maya, Opportunity Intelligence, Career Intelligence, Relationship Intelligence, Acquisition, Career Development, Outcome Learning, privacy, governance, or measurable career outcomes.
+The product should keep absorbing useful career functionality into one coherent, evidence-backed relationship until asking Maya is easier and more effective than operating separate job boards, resume tools, application trackers, career coaches, networking tools, and advancement workflows.
