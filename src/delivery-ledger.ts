@@ -23,6 +23,13 @@ const allowed: Record<DeliveryState, DeliveryState[]> = {
 export class DeliveryLedger {
   private readonly events = new Map<string, DeliveryEvent[]>();
 
+  constructor(initial: DeliveryEvent[] = []) { this.restore(initial); }
+
+  restore(initial: DeliveryEvent[]) {
+    this.events.clear();
+    for (const event of [...initial].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at))) this.record(event);
+  }
+
   record(event: DeliveryEvent) {
     if (!event.id || !event.actionId) throw new Error('delivery event id and actionId required');
     if (!event.at || Number.isNaN(Date.parse(event.at))) throw new Error('valid delivery event timestamp required');
@@ -32,6 +39,7 @@ export class DeliveryLedger {
     if (current && !allowed[current].includes(event.state)) throw new Error(`invalid delivery transition ${current} -> ${event.state}`);
     if (!current && event.state !== 'prepared') throw new Error('delivery lifecycle must begin at prepared');
     if (['provider-acknowledged','verified-received'].includes(event.state) && !event.providerMessageId) throw new Error(`${event.state} requires providerMessageId`);
+    if (['provider-acknowledged','verified-received'].includes(event.state) && !event.provider) throw new Error(`${event.state} requires provider`);
     history.push(structuredClone(event));
     this.events.set(event.actionId, history);
     return structuredClone(event);
