@@ -1,14 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HiredEngine } from '../src/engine.js';
-import { deterministicMayaReply } from '../src/maya-service.js';
-import { buildMayaWorkflowState } from '../src/maya-workflows.js';
+import { deterministicMayaReply, type MayaResponse } from '../src/maya-service.js';
+import { buildMayaWorkflowState, type WorkflowRequestContext } from '../src/maya-workflows.js';
 import { testCandidate, testEvidence, testJobs } from './test-records.js';
 
 function engineWithOpportunity() {
   const engine=new HiredEngine(testCandidate(),testEvidence());
   const opportunity=engine.ingest(testJobs()[0]);
   return {engine,opportunity};
+}
+
+function workflowFor(engine:HiredEngine,request:WorkflowRequestContext,response:MayaResponse){
+  return buildMayaWorkflowState(engine,request,{type:response.type});
 }
 
 test('Maya career lifecycle routes produce explicit end-to-end workflow state',()=>{
@@ -28,7 +32,7 @@ test('Maya career lifecycle routes produce explicit end-to-end workflow state',(
   for(const item of cases){
     const request={message:item.message,opportunityId:item.opportunityId};
     const response=deterministicMayaReply(engine,request);
-    const workflow=buildMayaWorkflowState(engine,request,response);
+    const workflow=workflowFor(engine,request,response);
     assert.equal(workflow.kind,item.expected);
     assert.equal(workflow.endToEnd,true);
     assert.ok(workflow.steps.length>0);
@@ -50,14 +54,15 @@ test('approved outreach advances the opportunity to CONTACTED',()=>{
 
 test('approved application advances the opportunity to APPLIED and closes the internal submission workflow',()=>{
   const {engine,opportunity}=engineWithOpportunity();
-  const reply=deterministicMayaReply(engine,{message:'Apply to this role',opportunityId:opportunity.id});
+  const request={message:'Apply to this role',opportunityId:opportunity.id};
+  const reply=deterministicMayaReply(engine,request);
   assert.equal(reply.type,'application');
-  const before=buildMayaWorkflowState(engine,{message:'Apply to this role',opportunityId:opportunity.id},reply);
+  const before=workflowFor(engine,request,reply);
   assert.equal(before.kind,'application');
   assert.equal(before.steps.find(step=>step.id==='approval')?.status,'ready');
 
   const approval=engine.requestApplication(opportunity.id);
-  const pending=buildMayaWorkflowState(engine,{message:'Apply to this role',opportunityId:opportunity.id},reply);
+  const pending=workflowFor(engine,request,reply);
   assert.equal(pending.steps.find(step=>step.id==='approval')?.status,'complete');
 
   engine.governor.approve(approval.id);
@@ -68,7 +73,7 @@ test('approved application advances the opportunity to APPLIED and closes the in
   engine.recordCareerOutcome({
     id:'career-outcome-application',candidateId:engine.profile.id,opportunityId:opportunity.id,checkpoint:'application',at:new Date().toISOString()
   });
-  const after=buildMayaWorkflowState(engine,{message:'Apply to this role',opportunityId:opportunity.id},reply);
+  const after=workflowFor(engine,request,reply);
   assert.equal(after.steps.find(step=>step.id==='learn')?.status,'complete');
 });
 
@@ -77,7 +82,7 @@ test('application questions remain bound to the same selected opportunity and ev
   const request={message:'Help me answer the application questions',opportunityId:opportunity.id,applicationQuestions:['Describe your TypeScript experience.','Are you authorized to work in the United States?']};
   const response=deterministicMayaReply(engine,request);
   assert.equal(response.type,'application-questions');
-  const workflow=buildMayaWorkflowState(engine,request,response);
+  const workflow=workflowFor(engine,request,response);
   assert.equal(workflow.kind,'application-questions');
   assert.equal(workflow.steps.find(step=>step.id==='questions')?.status,'complete');
   assert.equal(workflow.steps.find(step=>step.id==='package')?.status,'complete');
@@ -87,14 +92,14 @@ test('negotiation workflow blocks without real offer terms and activates when te
   const engine=new HiredEngine(testCandidate(),testEvidence());
   const emptyRequest={message:'Help me negotiate my offer'};
   const emptyResponse=deterministicMayaReply(engine,emptyRequest);
-  const blocked=buildMayaWorkflowState(engine,emptyRequest,emptyResponse);
+  const blocked=workflowFor(engine,emptyRequest,emptyResponse);
   assert.equal(blocked.kind,'offer-negotiation');
   assert.equal(blocked.blocked,true);
   assert.equal(blocked.steps.find(step=>step.id==='offer')?.status,'blocked');
 
   const request={message:'Help me negotiate my offer',offers:[{employer:'Test Employer',title:'Engineer',base:150000,bonus:10000}]};
   const response=deterministicMayaReply(engine,request);
-  const active=buildMayaWorkflowState(engine,request,response);
+  const active=workflowFor(engine,request,response);
   assert.equal(active.steps.find(step=>step.id==='offer')?.status,'complete');
   assert.equal(active.steps.find(step=>step.id==='strategy')?.status,'ready');
 });
