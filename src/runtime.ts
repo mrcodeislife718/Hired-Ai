@@ -21,19 +21,22 @@ export class HiredRuntime {
         opportunityWatches: snapshot?.opportunityWatches
       }
     );
-    if (snapshot) engine.store.restore(snapshot);
+    if (snapshot) {
+      engine.store.restore(snapshot);
+      engine.governor.restoreDeliveryEvents(snapshot.deliveryEvents ?? []);
+    }
     return new HiredRuntime(engine, persistence);
   }
 
   snapshot(): StoreSnapshot {
-    return { ...this.engine.store.snapshot(), ...this.engine.durableState() };
+    return { ...this.engine.store.snapshot(), ...this.engine.durableState(), deliveryEvents:this.engine.governor.deliveryEvents() };
   }
 
   async checkpoint() {
     const span = this.traces.start('persistence.checkpoint');
     try {
       await this.persistence.save(this.snapshot());
-      span.end({ opportunities: this.engine.store.opportunities.size, saved: this.engine.saved.listSaved().length, outcomes: this.engine.outcomes.all().length });
+      span.end({ opportunities: this.engine.store.opportunities.size, saved: this.engine.saved.listSaved().length, outcomes: this.engine.outcomes.all().length, deliveries:this.engine.governor.deliveryEvents().length });
     } catch (error) { span.fail(error); throw error; }
   }
 
