@@ -1,9 +1,26 @@
 import type { AccountRecord } from './accounts.js';
 import { AccountStore } from './accounts.js';
 import { DiscoveryOrchestrator, sourcesFromEnv } from './discovery.js';
+import { HttpJsonConnector, type ConnectorCapability, type HttpJsonConnectorOptions } from './connector-fabric.js';
 import { HiredRuntime } from './runtime.js';
 import { persistenceFromEnv } from './persistence.js';
 import { GitHubPortfolioIndexer } from './portfolio.js';
+
+const CONNECTOR_CAPABILITIES = new Set<ConnectorCapability>(['submit-application','send-outreach','send-email','create-calendar-event','read-opportunities','read-employer-intelligence','read-compensation','verify-credential']);
+
+function connectorsFromEnv():HttpJsonConnector[] {
+  const raw=process.env.HIRED_CONNECTORS_JSON?.trim();if(!raw)return[];
+  let parsed:unknown;try{parsed=JSON.parse(raw);}catch{throw new Error('HIRED_CONNECTORS_JSON must be valid JSON');}
+  if(!Array.isArray(parsed))throw new Error('HIRED_CONNECTORS_JSON must be an array');
+  return parsed.map((entry,index)=>{
+    if(!entry||typeof entry!=='object')throw new Error(`connector configuration ${index} must be an object`);
+    const value=entry as Record<string,unknown>;const capabilities=Array.isArray(value.capabilities)?value.capabilities.map(String):[];
+    if(!capabilities.length||capabilities.some(capability=>!CONNECTOR_CAPABILITIES.has(capability as ConnectorCapability)))throw new Error(`connector configuration ${index} contains unsupported capabilities`);
+    const options:HttpJsonConnectorOptions={id:String(value.id??''),provider:String(value.provider??''),endpoint:String(value.endpoint??''),capabilities:capabilities as ConnectorCapability[],bearerToken:typeof value.bearerToken==='string'?value.bearerToken:undefined,timeoutMs:typeof value.timeoutMs==='number'?value.timeoutMs:undefined};
+    if(!options.id.trim()||!options.provider.trim()||!options.endpoint.trim())throw new Error(`connector configuration ${index} requires id, provider and endpoint`);
+    return new HttpJsonConnector(options);
+  });
+}
 
 export class CommercialPlatform {
   readonly accounts = new AccountStore();
@@ -13,6 +30,7 @@ export class CommercialPlatform {
     const cached = this.runtimes.get(account.id);
     if (cached) return cached;
     const runtime = await HiredRuntime.create(account.profile, [], persistenceFromEnv(`account:${account.id}`));
+    for(const connector of connectorsFromEnv())runtime.registerConnector(connector);
     runtime.startAutoCheckpoint();
     this.runtimes.set(account.id, runtime);
     return runtime;
@@ -59,7 +77,8 @@ export class CommercialPlatform {
     return {
       exportedAt: new Date().toISOString(),
       account: this.accounts.publicAccount(account),
-      careerState: runtime.engine.store.snapshot()
+      careerState: runtime.engine.store.snapshot(),
+      connectorOperations: runtime.connectors.all()
     };
   }
 
