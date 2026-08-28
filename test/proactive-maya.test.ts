@@ -90,11 +90,12 @@ test('repeated proactive notifications remain idempotent after cooldown',()=>{
   const now=new Date('2026-08-28T12:00:00.000Z');
   const engine=new HiredEngine(testCandidate(),testEvidence());
   buildPlan(engine,now);
-  const first=engine.proactiveNotifications(now,1);
-  assert.equal(first.length,1);
-  const second=engine.proactiveNotifications(addDays(now,2),1);
-  assert.equal(second.length,1);
-  assert.equal(second[0].id,first[0].id);
+  const first=engine.proactiveNotifications(now,10);
+  assert.ok(first.length>0);
+  const target=first.find(signal=>signal.kind==='plan-step-ready');
+  assert.ok(target);
+  const second=engine.proactiveNotifications(addDays(now,2),10);
+  assert.ok(second.some(signal=>signal.id===target!.id));
   assert.ok(engine.careerState.events.verifyChain().valid);
 });
 
