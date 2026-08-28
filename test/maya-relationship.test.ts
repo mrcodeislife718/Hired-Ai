@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAYA_RELATIONSHIP_STANDARD, MayaLanguageModel, mayaLanguagePrompt } from '../src/maya-language.js';
+import { buildMayaRelationshipIntelligence } from '../src/maya-relationship-intelligence.js';
 
 test('Maya relationship standard combines warmth with candid career judgment', () => {
   assert.equal(MAYA_RELATIONSHIP_STANDARD.identity, 'trusted-career-friend');
@@ -11,6 +12,40 @@ test('Maya relationship standard combines warmth with candid career judgment', (
   assert.ok(MAYA_RELATIONSHIP_STANDARD.avoid.includes('claiming to be human'));
 });
 
+test('relationship intelligence learns explicit conversational preferences without inventing memory', () => {
+  const relationship=buildMayaRelationshipIntelligence({
+    userMessage:'Continue from where we left off. Keep it direct.',
+    context:{history:[
+      {role:'user',content:'I want you to challenge me when my career plan is weak.'},
+      {role:'assistant',content:'Next we should tighten the resume before the interview.'},
+      {role:'user',content:'I have an interview scheduled for Acme next Tuesday.'}
+    ]}
+  });
+  assert.ok(relationship.tone.includes('direct'));
+  assert.equal(relationship.moment,'continuation');
+  assert.ok(relationship.explicitPreferences.some(item=>/challenge me/i.test(item)));
+  assert.ok(relationship.activeThreads.includes('resume'));
+  assert.ok(relationship.activeThreads.includes('interview'));
+  assert.ok(relationship.unresolvedCommitments.some(item=>/tighten the resume/i.test(item)));
+  assert.equal(relationship.memoryPolicy.noInventedMemory,true);
+  assert.equal(relationship.memoryPolicy.noSensitiveInference,true);
+});
+
+test('relationship intelligence distinguishes a real setback from generic history', () => {
+  const relationship=buildMayaRelationshipIntelligence({
+    userMessage:'I got rejected from the role we prepared for.',
+    context:{history:[
+      {role:'user',content:'Please keep this concise.'},
+      {role:'assistant',content:'We prepared the interview story bank for the role.'}
+    ]}
+  });
+  assert.equal(relationship.moment,'setback');
+  assert.ok(relationship.tone.includes('concise'));
+  assert.ok(relationship.responseGuidance.some(item=>/acknowledge the setback/i.test(item)));
+  assert.ok(relationship.activeThreads.includes('interview'));
+  assert.ok(relationship.activeThreads.includes('outcome-learning'));
+});
+
 test('Maya language prompt treats recent history as relationship continuity without overruling engine truth', () => {
   const prompt=mayaLanguagePrompt({
     userMessage:'I got rejected from the role we prepared for.',
@@ -18,9 +53,11 @@ test('Maya language prompt treats recent history as relationship continuity with
     context:{history:[{role:'assistant',content:'We prepared for Acme together.'}],workflow:{currentStep:'outcome-learning'}}
   });
   assert.match(prompt,/trusted career friend/i);
+  assert.match(prompt,/RELATIONSHIP INTELLIGENCE/);
   assert.match(prompt,/RECENT RELATIONSHIP HISTORY/);
   assert.match(prompt,/Do not pretend to remember anything that is not available/i);
   assert.match(prompt,/deterministic result as ground truth/i);
+  assert.match(prompt,/noSensitiveInference/);
   assert.match(prompt,/rejected/i);
   assert.match(prompt,/outcome-learning/i);
 });
