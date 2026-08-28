@@ -8,6 +8,7 @@ const forbiddenFiles=new Set(['src/demo-data.ts','src/seed.ts','src/cli.ts']);
 const forbiddenImplementationPatterns=[
   [/\bTODO\b/i,'TODO marker'],
   [/\bFIXME\b/i,'FIXME marker'],
+  [/\bplaceholder\s*=/i,'placeholder UI attribute'],
   [/\bplaceholder (?:implementation|logic|data|value|response|result|content)\b/i,'placeholder implementation marker'],
   [/\bmock data\b/i,'mock-data marker'],
   [/\bnot implemented\b/i,'not-implemented marker'],
@@ -41,7 +42,7 @@ for(const forbidden of ['panelGrid','employer-dashboard','career dashboard','das
   if(ui.includes(forbidden)) failures.push(`src/web-ui.ts: non-conversational surface token ${forbidden}`);
 }
 const service=await readFile(join(src,'maya-service.ts'),'utf8');
-for(const required of ['career-advantage.js','maya-universal-engine-adapter.js','career-transition','career-advancement','career-reentry']){
+for(const required of ['career-advantage.js','maya-universal-engine-adapter.js','maya-workflows.js','career-transition','career-advancement','career-reentry']){
   if(!service.includes(required)) failures.push(`src/maya-service.ts: missing universal career capability ${required}`);
 }
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
