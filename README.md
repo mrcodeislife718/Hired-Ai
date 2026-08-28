@@ -6,13 +6,13 @@ Getting hired is one important transaction. Building a durable, better-paid, mor
 
 ## Meet Maya
 
-**Maya is the AI career agent inside Hired AI.** The customer should not have to operate recruiting software, navigate feature dashboards, or coordinate separate career tools. They talk or type to Maya, and Maya coordinates the system on their behalf.
+**Maya is the conversational Career Operating System through which users experience Hired AI.** She is not a chatbot layered over recruiting software. Conversation is the operating surface: users talk or type naturally while Maya coordinates durable career state, evidence, opportunity intelligence, applications, professional relationships, interviews, negotiation, advancement, outcomes, and learning underneath the conversation.
 
 > **Product principle:** manage the career by talking to Maya, not by operating recruiting software.
 
 The customer-facing identity is simply:
 
-> **Maya — Your AI Career Agent**
+> **Maya — Your Conversational Career OS**
 
 Maya is designed to support the full career lifecycle across professions and industries. She can help someone enter the workforce, reenter after a break, change fields, find and evaluate opportunities, prove capability, improve professional positioning, prepare applications, build useful professional relationships, practice for interviews and assessments, negotiate offers, pursue promotions or internal mobility, improve compensation, and preserve long-term career options.
 
@@ -39,21 +39,28 @@ Maya uses the proof appropriate to the profession, including employment history,
 
 Legally or professionally required credentials remain hard gates. Strong positioning cannot substitute for a required license, clearance, certification, registration, authorization, or other mandatory qualification.
 
-## Conversation-first product surface
+## Conversation-first operating surface
 
 The primary product surface is one persistent Maya conversation. Career capabilities appear inside that conversation as context, evidence, choices, follow-up actions, and generated artifacts rather than separate dashboard workflows.
 
 The web experience provides:
 
 - a ChatGPT-style conversation thread
-- persistent conversation history
+- persistent recent conversation history
+- durable long-horizon career and relationship memory
 - conversational resume intake and review
 - inline opportunity comparisons and explanations
 - conversational career-health, transition, reentry, and advancement planning
 - conversational interview, application, employer, networking, and negotiation support
 - explicit authorization before identity-bearing external actions
 
-The architecture may contain many specialized engines. The user should experience one coordinated career agent.
+The architecture may contain many specialized engines. The user should experience one continuous Career Operating System.
+
+## Long-horizon continuity
+
+Maya does not need the entire conversation archive stuffed into every turn. She selectively persists durable context such as explicit career goals, communication preferences, strategies, commitments, milestones, outcomes, and recurring career patterns, then retrieves only what is relevant to the current decision.
+
+Long-term memory is source-bound and user-correctable. Users can correct or ask Maya to forget remembered context. Conversational memory never becomes verified professional evidence by itself, cannot satisfy credential or licensing gates, and must not infer sensitive traits or private facts.
 
 ## Career Advantage
 
@@ -95,7 +102,7 @@ Maintains a living model of goals, constraints, capabilities, evidence, preferen
 Decomposes role requirements, distinguishes hard gates from preferences, synthesizes multiple proof signals, predicts objections, models likely competitors, and compiles strongest-defensible positioning from attributable evidence.
 
 ### Relationship Intelligence
-Builds durable professional relationship paths across recruiters, hiring managers, peers, mentors, former colleagues, associations, communities, customers, alumni, referrals, and other profession-appropriate networks.
+Builds durable professional relationship paths across recruiters, hiring managers, peers, mentors, former colleagues, associations, communities, customers, alumni, referrals, and other profession-appropriate networks while preserving long-horizon continuity with the user.
 
 ### Acquisition Intelligence
 Compiles consistent resumes, application answers, outreach, proof indexes, follow-ups, and interview narratives from one evidence package so material facts do not drift between surfaces.
@@ -180,7 +187,8 @@ Hired AI includes candidate and employer-side foundations for accounts, subscrip
 The repository includes:
 
 - TypeScript career and acquisition engines
-- Maya conversational service with deterministic fallback
+- Maya conversational Career OS service with deterministic fallback
+- source-bound long-horizon relationship memory with local and PostgreSQL durability
 - cross-industry universal career intelligence
 - Career Twin and durable career outcomes
 - opportunity discovery, reliability, scoring, readiness, and saved watches
@@ -190,7 +198,7 @@ The repository includes:
 - governed external actions
 - PostgreSQL persistence when configured, with local durable storage where supported
 - Stripe subscription and webhook verification
-- tenant-isolated accounts, sessions, and conversation history
+- tenant-isolated accounts, sessions, conversation history, and long-term memory
 - Node 22/24 CI
 - a production-integrity gate that rejects production fixture files, unfinished implementation markers, hard-coded candidate fixtures, and regression to dashboard-style primary UI
 
@@ -236,21 +244,23 @@ The check path builds TypeScript, runs the test suite, and executes the producti
 
 ## Product doctrine
 
-1. Maya is the primary customer interface.
-2. Every customer-facing career capability should be usable conversationally.
-3. Treat every profession and industry as first-class.
-4. Optimize for durable career outcomes, not engagement or application volume.
-5. Advocate for the candidate as strongly as the evidence defensibly allows.
-6. Never replace a mandatory credential with positioning.
-7. Compile material claims from attributable evidence and preserve consistency across artifacts.
-8. Diagnose the failing career or hiring stage before changing strategy.
-9. Prefer the smallest high-value proof action over generic skill accumulation.
-10. Professional relationships are durable career assets, not spam channels.
-11. External identity-bearing actions require authorization and verified execution.
-12. Important recommendations must be explainable and uncertainty must remain visible.
-13. Learn from real outcomes without overfitting sparse samples.
-14. Payment may buy service, never distort organic fit ranking or truth.
-15. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention, and long-term optionality.
+1. Maya is the conversational Career Operating System and primary customer interface.
+2. Conversation is the operating surface, not a chatbot wrapper around separate career software.
+3. Every customer-facing career capability should be usable conversationally.
+4. Treat every profession and industry as first-class.
+5. Optimize for durable career outcomes, not engagement or application volume.
+6. Advocate for the candidate as strongly as the evidence defensibly allows.
+7. Never replace a mandatory credential with positioning.
+8. Compile material claims from attributable evidence and preserve consistency across artifacts.
+9. Diagnose the failing career or hiring stage before changing strategy.
+10. Prefer the smallest high-value proof action over generic skill accumulation.
+11. Professional relationships are durable career assets, not spam channels.
+12. External identity-bearing actions require authorization and verified execution.
+13. Important recommendations must be explainable and uncertainty must remain visible.
+14. Learn from real outcomes without overfitting sparse samples.
+15. Long-term memory must be selective, source-bound, user-correctable, and separate from verified professional evidence.
+16. Payment may buy service, never distort organic fit ranking or truth.
+17. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention, and long-term optionality.
 
 ## Commercial proof standard
 
@@ -258,6 +268,6 @@ Hired AI should not claim technical superiority from architecture alone. It shou
 
 ## Canonical direction
 
-**Hired AI helps people build stronger careers. Maya is the conversational AI career agent through which they do it.**
+**Hired AI helps people build stronger careers. Maya is the conversational Career Operating System through which they do it.**
 
 The product should keep absorbing useful career functionality into one coherent, evidence-backed relationship until asking Maya is easier and more effective than operating separate job boards, resume tools, application trackers, career coaches, networking tools, and advancement workflows.
