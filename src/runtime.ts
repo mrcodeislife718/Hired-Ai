@@ -27,7 +27,13 @@ export class HiredRuntime {
         const state=engine.governor.deliveryState(operation.approvalId);
         if(state==='provider-acknowledged')engine.governor.verifyReceived(operation.approvalId,operation.provider,operation.providerMessageId,operation.detail);
       },
-      onDeadLetter:operation=>engine.governor.audit('ConnectorFabric','CONNECTOR_DEAD_LETTER',operation.opportunityId,{operationId:operation.id,connectorId:operation.connectorId,provider:operation.provider,attempts:operation.attempts,reason:operation.deadLetterReason})
+      onDeadLetter:operation=>{
+        if(operation.approvalId){
+          const state=engine.governor.deliveryState(operation.approvalId);
+          if(state==='dispatched'||state==='provider-acknowledged'||state==='unknown')engine.governor.failDelivery(operation.approvalId,operation.deadLetterReason??'connector retries exhausted');
+        }
+        engine.governor.audit('ConnectorFabric','CONNECTOR_DEAD_LETTER',operation.opportunityId,{operationId:operation.id,connectorId:operation.connectorId,provider:operation.provider,attempts:operation.attempts,reason:operation.deadLetterReason});
+      }
     });
   }
   static async create(profile:CandidateProfile,seedEvidence:Evidence[]=[],persistence=persistenceFromEnv()){
@@ -42,6 +48,12 @@ export class HiredRuntime {
     if(approval.status!=='APPROVED'&&approval.status!=='EXECUTED')throw new Error('connector dispatch requires explicit approval');
     const operation=this.connectors.prepare({connectorId,capability,approvalId,opportunityId:approval.opportunityId,payload:approval.payload,idempotencyKey:`approval:${approvalId}:${connectorId}:${capability}`,maxAttempts});
     const result=await this.connectors.dispatch(operation.id,approval.payload);await this.checkpoint();return result;
+  }
+  async retryConnectorOperation(operationId:string,at=new Date()){
+    const operation=this.connectors.get(operationId);if(operation.state!=='retrying')throw new Error(`connector operation is not retryable from ${operation.state}`);
+    if(!operation.approvalId)throw new Error('connector retry requires recoverable approval payload');
+    const approval=this.engine.store.approvals.get(operation.approvalId);if(!approval)throw new Error('connector approval not found');
+    const result=await this.connectors.dispatch(operation.id,approval.payload,at);await this.checkpoint();return result;
   }
   snapshot():StoreSnapshot{return {...this.engine.store.snapshot(),...this.engine.durableState(),deliveryEvents:this.engine.governor.deliveryEvents(),connectorFabric:this.connectors.snapshot()};}
   async checkpoint(){const span=this.traces.start('persistence.checkpoint');try{await this.persistence.save(this.snapshot());span.end({opportunities:this.engine.store.opportunities.size,saved:this.engine.saved.listSaved().length,outcomes:this.engine.outcomes.all().length,deliveries:this.engine.governor.deliveryEvents().length,careerPlans:this.engine.plans.all().length,careerEvents:this.engine.careerState.events.all().length,proactiveSignals:this.engine.proactive.all().length,connectorOperations:this.connectors.all().length,connectorDeadLetters:this.connectors.deadLetters().length});}catch(error){span.fail(error);throw error;}}
