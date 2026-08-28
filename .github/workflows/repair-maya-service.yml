@@ -1,0 +1,39 @@
+name: Repair Maya Service
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-maya-service
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Correct workflow render integration if needed
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/maya-service.ts')
+          text = p.read_text()
+          old = "context:{history,result:{...result,message:undefined},workflow}),fallback:"
+          new = "context:{history,result:{...result,message:undefined},workflow}}),fallback:"
+          if old in text:
+              p.write_text(text.replace(old, new, 1))
+          PY
+          if git diff --quiet; then
+            echo "No repair required"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/maya-service.ts
+          git commit -m "Fix Maya workflow render syntax"
+          git push
