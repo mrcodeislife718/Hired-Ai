@@ -65,7 +65,7 @@ async function handleStripeWebhook(req:IncomingMessage,res:ServerResponse){const
 
 async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(req.url??'/','http://localhost');try{
   if(req.method==='GET'&&url.pathname==='/')return sendHtml(res,renderMayaPage());
-  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true}});
+  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true,proactiveCareerOS:true}});
   if(req.method==='GET'&&url.pathname==='/api/plans')return sendJson(res,200,{plans:commercialPlans().map(({stripePriceId,...plan})=>({...plan,checkoutConfigured:Boolean(stripePriceId)})),billing:checkoutReady()});
   if(req.method==='POST'&&url.pathname==='/api/stripe/webhook')return handleStripeWebhook(req,res);
   if(req.method&&!['GET','HEAD','OPTIONS'].includes(req.method)&&!enforceOrigin(req,res))return;
@@ -89,7 +89,6 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
 
   const runtime=await platform.runtimeFor(account);const engine=runtime.engine;
 
-  // Free Resume Studio is intentionally available before paid-plan gating.
   if(req.method==='POST'&&url.pathname==='/api/resume-studio'){
     const body=await readJson<{rawResumeText?:string;targetTitle?:string;targetCompany?:string;targetRequirements?:string[];templateId?:ResumeTemplateId;variant?:ResumeVariant}>(req);
     const access=resumeAccessFor(account);
@@ -112,7 +111,6 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(savedMatch&&req.method==='POST'){const body=await readJson<{notes?:string;priority?:'low'|'medium'|'high'}>(req);const result=engine.saveOpportunity(savedMatch[1],body.notes,body.priority);await runtime.checkpoint();return sendJson(res,201,result);}
   if(savedMatch&&req.method==='DELETE'){const result=engine.unsaveOpportunity(savedMatch[1]);await runtime.checkpoint();return sendJson(res,200,{removed:result});}
 
-  // Employer foundation: account-backed organization, role definition, RBAC and consent.
   if(req.method==='POST'&&url.pathname==='/api/employer/organizations'){const body=await readJson<{name?:string}>(req);return sendJson(res,201,employers.createOrganization(String(body.name??''),account.id));}
   const orgMember=url.pathname.match(/^\/api\/employer\/organizations\/([^/]+)\/members$/);
   if(orgMember&&req.method==='POST'){const body=await readJson<{accountId?:string;role?:EmployerRole}>(req);if(!body.accountId||!body.role||body.role==='owner')return sendJson(res,400,{error:'member accountId and non-owner role required'});return sendJson(res,201,employers.addMember(orgMember[1],account.id,body.accountId,body.role));}
@@ -123,10 +121,15 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(req.method==='GET'&&url.pathname==='/api/candidate/sourcing-consent')return sendJson(res,200,employers.candidateConsent(account.profile.id)??{candidateId:account.profile.id,visibility:'private',allowedOrganizationIds:[],blockedOrganizationIds:[],shareCompensationTarget:false,shareCareerPreferences:false});
 
   if(!requireActivePlan(account,res,'career'))return;
-  if(req.method==='POST'&&url.pathname==='/api/maya/chat')return sendJson(res,200,await maya.respond(account.id,engine,await readJson<MayaRequest>(req)));
+  if(req.method==='POST'&&url.pathname==='/api/maya/chat'){const result=await maya.respond(account.id,engine,await readJson<MayaRequest>(req));await runtime.checkpoint();return sendJson(res,200,result);}
   if(req.method==='GET'&&url.pathname==='/api/maya/history'){const limit=Number(url.searchParams.get('limit')??40);return sendJson(res,200,{messages:await maya.history(account.id,Number.isFinite(limit)?limit:40)});}
   if(req.method==='DELETE'&&url.pathname==='/api/maya/history'){await maya.clearHistory(account.id);return sendJson(res,200,{cleared:true});}
-  if(req.method==='GET'&&url.pathname==='/api/career/status')return sendJson(res,200,engine.careerStatus());
+  if(req.method==='GET'&&url.pathname==='/api/maya/attention'){const result=engine.evaluateProactive();await runtime.checkpoint();return sendJson(res,200,{summary:result.summary,signals:result.signals});}
+  const attentionAck=url.pathname.match(/^\/api\/maya\/attention\/([^/]+)\/acknowledge$/);
+  if(attentionAck&&req.method==='POST'){const result=engine.acknowledgeProactive(attentionAck[1]);await runtime.checkpoint();return sendJson(res,200,result);}
+  const attentionSnooze=url.pathname.match(/^\/api\/maya\/attention\/([^/]+)\/snooze$/);
+  if(attentionSnooze&&req.method==='POST'){const body=await readJson<{until?:string}>(req);if(!body.until||Number.isNaN(Date.parse(body.until)))return sendJson(res,400,{error:'valid snooze until timestamp required'});const until=new Date(body.until);if(until.getTime()<=Date.now())return sendJson(res,400,{error:'snooze until must be in the future'});const result=engine.snoozeProactive(attentionSnooze[1],until);await runtime.checkpoint();return sendJson(res,200,result);}
+  if(req.method==='GET'&&url.pathname==='/api/career/status'){const status=engine.careerStatus();await runtime.checkpoint();return sendJson(res,200,status);}
   if(req.method==='GET'&&url.pathname==='/api/opportunities')return sendJson(res,200,engine.selectiveOpportunities(60));
   if(req.method==='POST'&&url.pathname==='/api/discover')return sendJson(res,200,await platform.discoverFor(account));
   if(req.method==='POST'&&url.pathname==='/api/github/index'){const body=await readJson<{owner?:string;token?:string}>(req);const owner=String(body.owner??'').trim();if(!owner)return sendJson(res,400,{error:'GitHub owner required'});return sendJson(res,200,await platform.indexGitHubFor(account,owner,typeof body.token==='string'&&body.token.trim()?body.token.trim():undefined));}
