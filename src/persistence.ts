@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import type { ApprovalRequest, AuditEvent, Evidence, FeedbackEvent, Opportunity } from './domain.js';
 import type { CareerTwinSnapshot } from './career-twin.js';
 import type { CareerOutcomeEvent } from './career-outcomes.js';
+import type { CareerStateCoordinatorSnapshot } from './career-state-coordinator.js';
 import type { DeliveryEvent } from './delivery-ledger.js';
 import type { OpportunityWatchRule, SavedOpportunity } from './saved-opportunities.js';
 
@@ -17,6 +18,7 @@ export interface StoreSnapshot {
   savedOpportunities?: SavedOpportunity[];
   opportunityWatches?: OpportunityWatchRule[];
   deliveryEvents?: DeliveryEvent[];
+  careerState?: CareerStateCoordinatorSnapshot;
 }
 
 export interface PersistenceAdapter {
