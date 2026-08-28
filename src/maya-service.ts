@@ -162,7 +162,7 @@ export class MayaService {
     if(userMessage)await this.conversations.append(accountId,'user',userMessage,{opportunityId:input.opportunityId});
     const result=deterministicMayaReply(engine,input);const history=await this.conversations.recent(accountId,16);
     const workflow=buildMayaWorkflowState(engine,input,{type:result.type});
-    const rendered=this.language.configured?await executeReliably({operation:'maya.language.render',retries:1,ledger:this.reliability,primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,result:{...result,message:undefined},workflow}),fallback:async()=>result.message,verify:value=>typeof value==='string'&&value.trim().length>0}):result.message;
+    const rendered=this.language.configured?await executeReliably({operation:'maya.language.render',retries:1,ledger:this.reliability,primary:()=>this.language.render({userMessage,deterministicAnswer:result.message,context:{history,result:{...result,message:undefined},workflow}}),fallback:async()=>result.message,verify:value=>typeof value==='string'&&value.trim().length>0}):result.message;
     if(!this.language.configured)this.reliability.record({operation:'maya.deterministic.render',startedAt:Date.now(),finishedAt:Date.now(),success:true,modelCalls:0});
     await this.conversations.append(accountId,'assistant',rendered,{type:result.type,workflowKind:workflow.kind,currentStep:workflow.currentStep});
     return {...result,message:rendered,workflow,languageModel:this.language.configured?'configured-with-verified-fallback':'deterministic-engine',reliability:this.reliability.snapshot()};
