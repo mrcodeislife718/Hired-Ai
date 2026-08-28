@@ -25,7 +25,7 @@ test('Maya career lifecycle routes produce explicit end-to-end workflow state',(
     {message:'Assess my career health',expected:'career-health'},
     {message:'Build my network',expected:'network'},
     {message:'Find roles I can realistically win',expected:'opportunity-discovery'},
-    {message:'Why am I qualified for this role?',opportunityId:opportunity.id,expected:'opportunity-fit'},
+    {message:'Why am I qualified?',opportunityId:opportunity.id,expected:'opportunity-fit'},
     {message:'Research this company',opportunityId:opportunity.id,expected:'company-research'},
     {message:'Prepare me for the interview',opportunityId:opportunity.id,expected:'interview'}
   ];
