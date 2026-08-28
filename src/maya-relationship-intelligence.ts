@@ -33,20 +33,22 @@ function historyFromContext(context: unknown): RelationshipHistoryMessage[] {
   if (!context || typeof context !== 'object') return [];
   const history = (context as { history?: unknown }).history;
   if (!Array.isArray(history)) return [];
-  return history.flatMap(item => {
-    if (!item || typeof item !== 'object') return [];
+  const parsed: RelationshipHistoryMessage[] = [];
+  for (const item of history) {
+    if (!item || typeof item !== 'object') continue;
     const role = (item as { role?: unknown }).role;
     const content = (item as { content?: unknown }).content;
-    if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') return [];
-    return [{
+    if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') continue;
+    parsed.push({
       role,
       content: content.slice(0, 12_000),
       createdAt: typeof (item as { createdAt?: unknown }).createdAt === 'string' ? (item as { createdAt: string }).createdAt : undefined,
       metadata: (item as { metadata?: unknown }).metadata && typeof (item as { metadata?: unknown }).metadata === 'object'
         ? (item as { metadata: Record<string, unknown> }).metadata
         : undefined
-    }];
-  }).slice(-40);
+    });
+  }
+  return parsed.slice(-40);
 }
 
 function detectTone(userMessages: string[], currentMessage: string): ConversationTone[] {
