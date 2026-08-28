@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { auditGithubForCareer, buildInterviewPractice, buildNetworkingPlan, buildSocialCareerPlan, careerSurfaces, compareAndNegotiateOffers, surfaceCoverage } from '../src/career-surfaces.js';
 import { HiredEngine } from '../src/engine.js';
-import { candidate, evidence } from '../src/seed.js';
-import { demoJobs } from '../src/demo-data.js';
+import { testCandidate, testEvidence, testJobs } from './test-records.js';
+
+const candidate=testCandidate();
+const evidence=testEvidence();
+const jobs=testJobs();
 
 test('career surface map covers both sides and advanced Maya-only surfaces', () => {
   const coverage = surfaceCoverage();
@@ -32,7 +35,7 @@ test('social and networking plans optimize for professional relevance not connec
   const social = buildSocialCareerPlan(['linkedin'], ['AI Engineer'], evidence);
   assert.equal(social.platforms[0].platform, 'linkedin');
   assert.match(social.rule, /never manufacture engagement/i);
-  const network = buildNetworkingPlan({ targetCompanies:['Example Systems'] });
+  const network = buildNetworkingPlan({ targetCompanies:['Test Systems'] });
   assert.match(network.antiSpamRule, /quality relationships/i);
   assert.ok(network.lanes.includes('hiring managers'));
 });
@@ -48,9 +51,9 @@ test('offer comparison calculates economic totals without fabricating leverage',
 
 test('interview practice is grounded in an actual opportunity and includes candidate questions', () => {
   const engine = new HiredEngine(candidate, evidence);
-  const opportunity = engine.ingest(demoJobs[0]);
+  const opportunity = engine.ingest(jobs[0]);
   const plan = buildInterviewPractice(opportunity);
-  assert.match(plan.role, /Example Systems/);
+  assert.match(plan.role, /Test Systems/);
   assert.ok(plan.rounds.some(round => round.type === 'candidate-questions'));
   assert.ok(plan.scoring.includes('truthful handling of unknowns'));
 });
