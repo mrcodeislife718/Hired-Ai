@@ -83,3 +83,21 @@ test('connector fabric dead-letters exhausted work and refuses payload/idempoten
   await assert.rejects(()=>fabric.dispatch(operation.id,{message:'changed'},new Date('2026-08-28T12:00:04.000Z')),/payload hash mismatch/);
   assert.throws(()=>fabric.prepare({connectorId:'fail',capability:'send-outreach',payload:{message:'changed'},idempotencyKey:'one-operation'}),/idempotency conflict/);
 });
+
+test('runtime retry keeps approval authorization stable and dead-letter marks delivery failed',async()=>{
+  const persistence=new MemoryPersistence();
+  const runtime=await HiredRuntime.create(testCandidate(),testEvidence(),persistence);
+  const failing:CareerConnector={id:'runtime-fail',provider:'down.example',capabilities:['send-outreach'],async dispatch(){throw new ConnectorRetryableError('provider unavailable',1000);}};
+  runtime.registerConnector(failing);
+  const opportunity=runtime.engine.ingest(testJobs()[0]);
+  const approval=runtime.engine.requestOutreach(opportunity.id);runtime.engine.governor.approve(approval.id);
+  const first=await runtime.dispatchApproved(approval.id,failing.id,'send-outreach',2);
+  assert.equal(first.state,'retrying');
+  assert.equal(runtime.engine.store.approvals.get(approval.id)?.status,'EXECUTED');
+  assert.equal(runtime.engine.governor.deliveryState(approval.id),'dispatched');
+  const dead=await runtime.retryConnectorOperation(first.id,new Date(Date.parse(first.nextAttemptAt!)+1));
+  assert.equal(dead.state,'dead-letter');
+  assert.equal(runtime.engine.governor.deliveryState(approval.id),'failed');
+  assert.ok(runtime.engine.governor.deliveryHistory(approval.id).at(-1)?.detail?.includes('provider unavailable'));
+  assert.ok(runtime.engine.store.audit.some(event=>event.action==='CONNECTOR_DEAD_LETTER'));
+});
