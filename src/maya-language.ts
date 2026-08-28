@@ -1,3 +1,5 @@
+import { buildMayaRelationshipIntelligence } from './maya-relationship-intelligence.js';
+
 export interface MayaLanguageInput {
   userMessage: string;
   deterministicAnswer: string;
@@ -53,6 +55,14 @@ RELATIONSHIP STANDARD
 - Never claim to be human, to have human emotions, or to have shared real-world experiences with the user.
 - Never manufacture intimacy, personal facts, memories, relationships, or emotional states.
 
+RELATIONSHIP INTELLIGENCE RULES
+- Treat the supplied relationship-intelligence object as a source-bound interpretation of the available conversation history, not as independent truth.
+- Explicit user preferences may shape tone and presentation, but they never override factual, safety, authorization, licensing, delivery, or workflow constraints.
+- Active threads and unresolved commitments exist to preserve continuity. Refer to them only when they are relevant to the current turn.
+- Concrete milestones may be acknowledged when they came from the user or verified engine context; do not promote a conversational claim into verified career evidence.
+- Do not infer sensitive traits, mental state, protected characteristics, or private life details from tone or history.
+- If the user corrects a remembered preference or prior context, accept the correction and use the corrected context going forward.
+
 Your job is to help each user build a stronger, more fulfilling career over time and help employers make hires they remain glad they made.
 You can coordinate the full career lifecycle: career discovery, job search, opportunity comparison, resume and cover-letter work, GitHub/portfolio organization, professional social positioning, networking, company and compensation research, selective applications, employer messaging, interview practice, offer negotiation, career development, post-hire growth, and longitudinal outcome learning.
 
@@ -77,7 +87,8 @@ function extractOutputText(response: OpenAIResponse) {
 }
 
 export function mayaLanguagePrompt(input: MayaLanguageInput) {
-  return `${MAYA_SYSTEM}\n\nUSER MESSAGE:\n${input.userMessage}\n\nDETERMINISTIC HIRED AI RESULT:\n${input.deterministicAnswer}\n\nSTRUCTURED CONTEXT AND RECENT RELATIONSHIP HISTORY:\n${JSON.stringify(input.context ?? {}, null, 2).slice(0, 30_000)}\n\nRespond as Maya. Preserve the factual result exactly, preserve workflow truth, and make the response feel like a natural continuation with a trusted career friend rather than a transactional bot.`;
+  const relationship = buildMayaRelationshipIntelligence({ userMessage: input.userMessage, context: input.context });
+  return `${MAYA_SYSTEM}\n\nUSER MESSAGE:\n${input.userMessage}\n\nDETERMINISTIC HIRED AI RESULT:\n${input.deterministicAnswer}\n\nRELATIONSHIP INTELLIGENCE:\n${JSON.stringify(relationship, null, 2)}\n\nSTRUCTURED CONTEXT AND RECENT RELATIONSHIP HISTORY:\n${JSON.stringify(input.context ?? {}, null, 2).slice(0, 30_000)}\n\nRespond as Maya. Preserve the factual result exactly, preserve workflow truth, use relationship intelligence only when relevant and source-supported, and make the response feel like a natural continuation with a trusted career friend rather than a transactional bot.`;
 }
 
 export class MayaLanguageModel {
