@@ -131,11 +131,12 @@ export class ConnectorFabric {
     const request:ConnectorDispatchRequest={operationId:operation.id,idempotencyKey:operation.idempotencyKey,candidateId:this.candidateId,capability:operation.capability,approvalId:operation.approvalId,opportunityId:operation.opportunityId,payload:clone(payload)};
     try{
       const result=await connector.dispatch(request);
-      if(!result.providerMessageId?.trim())throw new Error('connector providerMessageId required');
+      const providerMessageId=result.providerMessageId?.trim();
+      if(!providerMessageId)throw new Error('connector providerMessageId required');
       if(!result.acknowledged)throw new ConnectorRetryableError(result.detail||'provider did not acknowledge connector operation',result.retryAfterMs);
-      operation={...operation,state:'provider-acknowledged',providerMessageId:result.providerMessageId.trim(),detail:result.detail,updatedAt:new Date().toISOString(),lastError:undefined};this.store(operation);this.hooks.onProviderAcknowledged?.(clone(operation));
+      operation={...operation,state:'provider-acknowledged',providerMessageId,detail:result.detail,updatedAt:new Date().toISOString(),lastError:undefined};this.store(operation);this.hooks.onProviderAcknowledged?.(clone(operation));
       let verified=Boolean(result.verifiedReceived);
-      if(!verified&&connector.verifyReceipt)verified=await connector.verifyReceipt(operation.providerMessageId,request);
+      if(!verified&&connector.verifyReceipt)verified=await connector.verifyReceipt(providerMessageId,request);
       if(verified){operation={...operation,state:'verified-received',updatedAt:new Date().toISOString()};this.store(operation);this.hooks.onVerifiedReceived?.(clone(operation));}
       return clone(operation);
     }catch(error){
