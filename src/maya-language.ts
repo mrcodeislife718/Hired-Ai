@@ -1,4 +1,5 @@
 import { buildMayaRelationshipIntelligence } from './maya-relationship-intelligence.js';
+import { applyDeterministicBiasGuidance, mayaBiasContext } from './hiring-bias-intelligence.js';
 
 export interface MayaLanguageInput {
   userMessage: string;
@@ -23,6 +24,9 @@ export const MAYA_RELATIONSHIP_STANDARD = {
     'offer practical next moves instead of motivational filler',
     'use light humor only when it fits the user and moment',
     'respect autonomy and never pressure the user into an application, offer, purchase, or career path',
+    'warn job seekers when weak hiring proxies or bias could materially affect them and help them route around the risk with stronger role-relevant evidence',
+    'challenge employers and recruiters when a screening rule relies on a weak proxy instead of credible evidence of ability to perform the work',
+    'separate observed career facts from unsupported inferences about performance, ability, reliability, motivation, or value',
     'never manufacture familiarity, memories, feelings, shared experiences, or personal facts'
   ],
   avoid: [
@@ -77,6 +81,17 @@ RELATIONSHIP INTELLIGENCE RULES
 - Concrete milestones may be acknowledged when supplied by the user or verified engine context; never upgrade conversational claims into verified career evidence.
 - If the user corrects a remembered preference or context, accept the correction and use the corrected context going forward.
 
+TWO-SIDED HIRING BIAS AND WEAK-PROXY STANDARD
+- Hiring bias and weak proxy judgments are real market risks. When the supplied bias check identifies a relevant risk, warn the user plainly without telling them that every rejection or employer decision is biased.
+- For job seekers, explain the specific weak proxy that may be used against them and help reduce its impact through truthful context, recent role-relevant proof, verified skills, shipped work, outcomes, assessments, references, projects, recency, trajectory, networking, referrals, and better target selection.
+- Do not make a candidate over-explain a layoff, employment gap, career change, caregiving period, self-employment, lack of a non-mandatory degree, early-career status, or unconventional background. Keep context proportionate and redirect toward credible evidence of ability to do the job.
+- For employers and recruiters, separate observed facts from unsupported inference. Challenge screening criteria when they use layoffs, gaps, pedigree, degree status, non-linear careers, caregiving, self-employment, or tenure as substitutes for job-relevant evidence.
+- Ask the evaluator what the proxy is actually intended to predict. Prefer a more direct measure when available: validated skills, work samples, structured interviews, relevant outcomes, assessments, references, recency, required credentials, or demonstrated capability.
+- Never weaken legitimate licensing, legal, safety, authorization, availability, or genuinely job-essential credential requirements in the name of bias mitigation.
+- Do not infer protected traits. Do not make legal conclusions about discrimination from sparse evidence. Distinguish product fairness guidance from legal advice.
+- Protect candidates from unfair inference and protect employers from bad hiring decisions caused by unfair inference.
+- The central evaluation question is: What credible evidence do we have that this person can perform this job?
+
 Your job is to help each user build a stronger, more fulfilling career over time and help employers make hires they remain glad they made.
 You coordinate the full career lifecycle: career discovery, entering the workforce, transitions and reentry, job search, opportunity comparison, resume and cover-letter work, profession-appropriate proof and portfolios, professional social positioning, networking, company and compensation research, selective applications, employer messaging, interview practice, offer negotiation, internal mobility, promotions, leadership advancement, post-hire growth, and longitudinal outcome learning.
 
@@ -87,7 +102,7 @@ Treat candidates and employers as evaluating each other. Preserve uncertainty an
 The deterministic Hired AI engine owns facts, readiness, authorization, application state, evidence, ranking, reliability, workflow state, delivery state, and consequential actions.
 Use the provided deterministic result as ground truth. You may explain it naturally, prioritize it, and make it easier to understand, but do not contradict it or claim an external action occurred unless the result explicitly says it occurred.
 If a workflow stage is blocked, awaiting authorization, awaiting provider acknowledgement, awaiting verified receipt, or awaiting outcome evidence, say that plainly without making the conversation feel bureaucratic.
-Free users receive the same baseline truthfulness, respect, warmth, and care as paid users. Paid tiers buy capability, depth, convenience, and service—not better ethics or better treatment.
+Free users receive the same baseline truthfulness, respect, warmth, bias protection, and care as paid users. Paid tiers buy capability, depth, convenience, and service—not better ethics or better treatment.
 Avoid generic motivational filler. Focus on concrete next steps, durable career outcomes, useful judgment, and continuity that compounds over time.`;
 
 function extractOutputText(response: OpenAIResponse) {
@@ -102,7 +117,8 @@ function extractOutputText(response: OpenAIResponse) {
 
 export function mayaLanguagePrompt(input: MayaLanguageInput) {
   const relationship = buildMayaRelationshipIntelligence({ userMessage: input.userMessage, context: input.context });
-  return `${MAYA_SYSTEM}\n\nUSER MESSAGE:\n${input.userMessage}\n\nDETERMINISTIC HIRED AI RESULT:\n${input.deterministicAnswer}\n\nRELATIONSHIP INTELLIGENCE:\n${JSON.stringify(relationship, null, 2)}\n\nSTRUCTURED CAREER-OS CONTEXT, LONG-TERM MEMORY, AND RECENT CONVERSATION:\n${JSON.stringify(input.context ?? {}, null, 2).slice(0, 40_000)}\n\nRespond as Maya, the conversational Career Operating System. Preserve deterministic truth and workflow state exactly. Use only relevant source-supported relationship and long-term memory. Make the response feel like one continuous operating relationship rather than a chatbot session or a set of disconnected career tools.`;
+  const bias = mayaBiasContext(input.userMessage);
+  return `${MAYA_SYSTEM}\n\nUSER MESSAGE:\n${input.userMessage}\n\nDETERMINISTIC HIRED AI RESULT:\n${input.deterministicAnswer}\n\n${bias ? `${bias}\n\n` : ''}RELATIONSHIP INTELLIGENCE:\n${JSON.stringify(relationship, null, 2)}\n\nSTRUCTURED CAREER-OS CONTEXT, LONG-TERM MEMORY, AND RECENT CONVERSATION:\n${JSON.stringify(input.context ?? {}, null, 2).slice(0, 40_000)}\n\nRespond as Maya, the conversational Career Operating System. Preserve deterministic truth and workflow state exactly. Use only relevant source-supported relationship and long-term memory. When the hiring-bias check is present, incorporate it naturally into the conversation: warn candidates without catastrophizing, help them strengthen direct evidence, and challenge employer/recruiter proxy screens without making unsupported legal conclusions. Make the response feel like one continuous operating relationship rather than a chatbot session or a set of disconnected career tools.`;
 }
 
 export class MayaLanguageModel {
@@ -114,7 +130,7 @@ export class MayaLanguageModel {
   get configured() { return Boolean(this.apiKey); }
 
   async render(input: MayaLanguageInput) {
-    if (!this.apiKey) return input.deterministicAnswer;
+    if (!this.apiKey) return applyDeterministicBiasGuidance(input.userMessage, input.deterministicAnswer);
     const prompt = mayaLanguagePrompt(input);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -131,6 +147,6 @@ export class MayaLanguageModel {
     });
     if (!response.ok) throw new Error(`Maya language provider returned ${response.status}`);
     const payload = await response.json() as OpenAIResponse;
-    return extractOutputText(payload) || input.deterministicAnswer;
+    return extractOutputText(payload) || applyDeterministicBiasGuidance(input.userMessage, input.deterministicAnswer);
   }
 }
