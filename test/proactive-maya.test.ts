@@ -60,12 +60,15 @@ test('proactive Maya detects authorization, unverified delivery, follow-up and i
 
   engine.governor.approve(approval.id);
   engine.governor.executeApproved(approval.id);
-  const later=engine.evaluateProactive(addDays(now,6));
+  const contacted=engine.store.opportunities.get(opportunity.id);
+  assert.ok(contacted);
+  const laterAt=addDays(new Date(contacted!.updatedAt),6);
+  const later=engine.evaluateProactive(laterAt);
   assert.ok(later.signals.some(signal=>signal.kind==='delivery-unverified'&&signal.sourceId===approval.id));
   assert.ok(later.signals.some(signal=>signal.kind==='application-follow-up'&&signal.opportunityId===opportunity.id));
 
   engine.governor.transition(opportunity.id,'RECRUITER_SCREEN');
-  const interview=engine.evaluateProactive(addDays(now,6));
+  const interview=engine.evaluateProactive(laterAt);
   assert.ok(interview.signals.some(signal=>signal.kind==='interview-preparation'&&signal.opportunityId===opportunity.id));
 });
 
