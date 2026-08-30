@@ -1,5 +1,5 @@
 import { buildMayaRelationshipIntelligence } from './maya-relationship-intelligence.js';
-import { mayaBiasContext } from './hiring-bias-intelligence.js';
+import { applyDeterministicBiasGuidance, mayaBiasContext } from './hiring-bias-intelligence.js';
 
 export interface MayaLanguageInput {
   userMessage: string;
@@ -130,7 +130,7 @@ export class MayaLanguageModel {
   get configured() { return Boolean(this.apiKey); }
 
   async render(input: MayaLanguageInput) {
-    if (!this.apiKey) return input.deterministicAnswer;
+    if (!this.apiKey) return applyDeterministicBiasGuidance(input.userMessage, input.deterministicAnswer);
     const prompt = mayaLanguagePrompt(input);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -147,6 +147,6 @@ export class MayaLanguageModel {
     });
     if (!response.ok) throw new Error(`Maya language provider returned ${response.status}`);
     const payload = await response.json() as OpenAIResponse;
-    return extractOutputText(payload) || input.deterministicAnswer;
+    return extractOutputText(payload) || applyDeterministicBiasGuidance(input.userMessage, input.deterministicAnswer);
   }
 }
