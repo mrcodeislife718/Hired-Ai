@@ -1,4 +1,18 @@
 import { id } from './utils.js';
+import {
+  FairnessAuditTrail,
+  auditFactInference,
+  buildBlindEvidencePacket,
+  buildStructuredInterview,
+  checkRejectionReason,
+  counterfactualCandidateReview,
+  evaluateEvidenceSubstitution,
+  summarizeHiringSignalQuality,
+  type CapabilityEvidence,
+  type HiringOutcomeObservation,
+  type HiringRequirement,
+  type DecisionType
+} from './bias-resistant-hiring.js';
 
 export type EmployerRole = 'owner' | 'admin' | 'recruiter' | 'hiring-manager' | 'viewer';
 export type CandidateVisibility = 'private' | 'matched-employers' | 'discoverable';
@@ -44,16 +58,25 @@ const permissions: Record<EmployerRole, Set<string>> = {
   viewer: new Set(['analytics:view'])
 };
 
+function requirementsFor(job:EmployerJob):HiringRequirement[]{
+  const hard=job.mustHaves.map((label,index)=>({id:`${job.id}:must:${index}`,label,capability:label,type:'skill' as const}));
+  const preferred=job.preferred.map((label,index)=>({id:`${job.id}:preferred:${index}`,label,capability:label,type:'preferred' as const}));
+  const outcomes=job.successOutcomes.map((label,index)=>({id:`${job.id}:outcome:${index}`,label,capability:label,type:'outcome' as const}));
+  return [...hard,...preferred,...outcomes];
+}
+
 export class EmployerPlatform {
   private readonly organizations = new Map<string, EmployerOrganization>();
   private readonly jobs = new Map<string, EmployerJob>();
   private readonly consent = new Map<string, CandidateSourcingConsent>();
+  private readonly fairness = new Map<string, FairnessAuditTrail>();
 
   createOrganization(name: string, ownerAccountId: string) {
     if (!name.trim() || !ownerAccountId) throw new Error('organization name and owner required');
     const now = new Date().toISOString();
     const org: EmployerOrganization = { id:id('org'), name:name.trim(), createdAt:now, members:[{ accountId:ownerAccountId, role:'owner', joinedAt:now }] };
     this.organizations.set(org.id, org);
+    this.fairness.set(org.id,new FairnessAuditTrail());
     return structuredClone(org);
   }
 
@@ -105,5 +128,59 @@ export class EmployerPlatform {
     if (consent.blockedOrganizationIds.includes(orgId)) return false;
     if (consent.visibility === 'discoverable') return true;
     return consent.allowedOrganizationIds.includes(orgId);
+  }
+
+  structuredInterview(jobId:string,orgId:string,actorAccountId:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
+    return buildStructuredInterview(requirementsFor(job));
+  }
+
+  evidenceSubstitution(jobId:string,requirementId:string,evidence:CapabilityEvidence[],orgId:string,actorAccountId:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
+    const requirement=requirementsFor(job).find(r=>r.id===requirementId);if(!requirement)throw new Error('requirement not found');
+    const result=evaluateEvidenceSubstitution(requirement,evidence);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'evidence-substitution-review',requirement:requirement.label,evidenceIds:evidence.map(e=>e.id),rationale:result.explanation});
+    return result;
+  }
+
+  factInferenceAudit(orgId:string,actorAccountId:string,input:{fact:string;inference:string;evidence:CapabilityEvidence[];confidence?:number}){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const result=auditFactInference(input);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'fact-inference-audit',fact:result.fact,inference:result.inference,evidenceIds:result.evidence.map(e=>e.id),confidence:result.confidence,rationale:result.challenge??'Inference supported by supplied verified evidence.'});
+    return result;
+  }
+
+  rejectionReasonAudit(jobId:string,orgId:string,actorAccountId:string,reason:string,evidence:CapabilityEvidence[]){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
+    const result=checkRejectionReason(reason,requirementsFor(job),evidence);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'rejection-reason-audit',evidenceIds:evidence.map(e=>e.id),decision:result.valid?'reject':'challenge',rationale:result.requiredImprovement??reason});
+    return result;
+  }
+
+  counterfactualReview(orgId:string,actorAccountId:string,input:{decisionWithProxy:DecisionType;decisionWithoutProxy:DecisionType;proxyLabel:string}){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const result=counterfactualCandidateReview(input);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'counterfactual-review',evidenceIds:[],decision:result.inconsistent?'challenge':input.decisionWithoutProxy,rationale:result.explanation});
+    return result;
+  }
+
+  blindEvidenceReview(orgId:string,actorAccountId:string,input:{evidence:CapabilityEvidence[];identityFields?:Record<string,unknown>;pedigreeFields?:Record<string,unknown>}){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const result=buildBlindEvidencePacket(input);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'blind-evidence-packet',evidenceIds:result.evidence.map(e=>e.id),rationale:`Removed ${result.removedFields.length} unnecessary identity/pedigree fields from initial evidence review.`});
+    return result;
+  }
+
+  hiringSignalQuality(orgId:string,actorAccountId:string,observations:HiringOutcomeObservation[]){
+    this.assertPermission(orgId,actorAccountId,'analytics:view');
+    return summarizeHiringSignalQuality(observations);
+  }
+
+  fairnessAuditTrail(orgId:string,actorAccountId:string){
+    this.assertPermission(orgId,actorAccountId,'analytics:view');
+    return this.fairness.get(orgId)?.list()??[];
   }
 }
