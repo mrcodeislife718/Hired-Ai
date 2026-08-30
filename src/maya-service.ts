@@ -8,6 +8,7 @@ import { buildUniversalPlanFromEngine } from './maya-universal-engine-adapter.js
 import { buildMayaWorkflowState } from './maya-workflows.js';
 import { toUniversalEvidence, type UniversalEvidence } from './universal-career-intelligence.js';
 import { applyDeterministicBiasGuidance } from './hiring-bias-intelligence.js';
+import { buildBiasResistantDecisionSupport, classifyCandidateRecovery, counterfactualCandidateReview, auditFactInference, buildBlindEvidencePacket, summarizeHiringSignalQuality, type CapabilityEvidence, type HiringOutcomeObservation, type HiringRequirement, type DecisionType } from './bias-resistant-hiring.js';
 import { auditGithubForCareer, buildInterviewPractice, buildNetworkingPlan, buildSocialCareerPlan, compareAndNegotiateOffers, surfaceCoverage, type GithubCareerAuditInput, type OfferInput } from './career-surfaces.js';
 
 export interface MayaRequest {
@@ -21,6 +22,13 @@ export interface MayaRequest {
   additionalEvidence?: UniversalEvidence[];
   applicationQuestions?: string[];
   funnel?: FunnelObservation;
+  hiringRequirements?: HiringRequirement[];
+  capabilityEvidence?: CapabilityEvidence[];
+  rejectionReason?: string;
+  factInference?: { fact:string; inference:string; evidence:CapabilityEvidence[]; confidence?:number };
+  counterfactual?: { decisionWithProxy:DecisionType; decisionWithoutProxy:DecisionType; proxyLabel:string };
+  blindReview?: { evidence:CapabilityEvidence[]; identityFields?:Record<string,unknown>; pedigreeFields?:Record<string,unknown> };
+  hiringOutcomes?: HiringOutcomeObservation[];
 }
 
 export interface MayaResponse extends Record<string, unknown> { message: string; actions?: string[]; }
@@ -64,26 +72,43 @@ function targetLabel(engine:HiredEngine) {
   return engine.profile.constraints.preferredTitles.length?engine.profile.constraints.preferredTitles.slice(0,3).join(', '):'your next role';
 }
 
+function decisionSupport(input:MayaRequest,message:string){
+  const support=buildBiasResistantDecisionSupport({message,requirements:input.hiringRequirements,evidence:input.capabilityEvidence,rejectionReason:input.rejectionReason});
+  return {
+    ...support,
+    recovery:input.rejectionReason?classifyCandidateRecovery({reason:input.rejectionReason,bias:support.bias,requirements:input.hiringRequirements,evidence:input.capabilityEvidence}):undefined,
+    factInference:input.factInference?auditFactInference(input.factInference):undefined,
+    counterfactual:input.counterfactual?counterfactualCandidateReview(input.counterfactual):undefined,
+    blindReview:input.blindReview?buildBlindEvidencePacket(input.blindReview):undefined,
+    signalQuality:input.hiringOutcomes?summarizeHiringSignalQuality(input.hiringOutcomes):undefined
+  };
+}
+
 export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):MayaResponse {
   const message=String(input.message??'').trim();
   const lower=message.toLowerCase();
   const socials=input.socialPlatforms?.length?input.socialPlatforms:['linkedin'];
   const opportunities=[...engine.store.opportunities.values()];
+  const hiringDecisionSupport=decisionSupport(input,message);
+
+  if(/bias|fairness|weak proxy|proxy screen|structured interview|rejection reason|blind review|counterfactual|fact.*inference|hiring signal|hiring quality/.test(lower)){
+    return {message:'I ran this through the bias-resistant hiring decision workflow. I separate requirements from the capabilities they are meant to predict, direct evidence from weak proxies, observed facts from unsupported inference, and current decisions from later outcome evidence. Genuine legal, licensing, safety, authorization, and mandatory credential gates remain hard gates.',type:'bias-resistant-hiring',decisionSupport:hiringDecisionSupport,actions:['Show the candidate risk map','Challenge weak proxy requirements','Build a structured interview','Audit the rejection reason','Run a counterfactual review','Show the evidence-only view','Show the fairness audit logic']};
+  }
 
   if(input.resumeText){
     const plan=engine.auditCareer(input.resumeText.slice(0,200_000),socials);
-    return {message:plan.resume.parsed.likelyOutdated?'Your resume is behind your current career evidence. I rebuilt the analysis around your strongest defensible value, target direction, and current opportunity evidence.':'Your resume is reasonably current, but I still checked where it is underselling you, weakly proven, poorly ordered, or misaligned with the roles you want.',type:'career-audit',plan,advantage:advantage(engine,input),actions:['Rewrite it for my strongest target role','Show me what employers will notice first','What proof am I missing?','Show my best opportunities']};
+    return {message:plan.resume.parsed.likelyOutdated?'Your resume is behind your current career evidence. I rebuilt the analysis around your strongest defensible value, target direction, and current opportunity evidence.':'Your resume is reasonably current, but I still checked where it is underselling you, weakly proven, poorly ordered, or misaligned with the roles you want.',type:'career-audit',plan,advantage:advantage(engine,input),decisionSupport:hiringDecisionSupport,actions:['Rewrite it for my strongest target role','Show me what employers will notice first','What proof am I missing?','Show my best opportunities']};
   }
 
   if(!message)return {message:'I’m Maya. Tell me the career outcome you want. You can be starting from zero, changing fields, returning after a break, trying to get hired now, negotiating an offer, or moving up. I’ll work backward from the outcome using the evidence and constraints that actually apply to your profession.',type:'welcome',advantage:advantage(engine,input),actions:['Help me start my career','Help me change careers','Find roles I can realistically win','Help me advance where I am','Audit my resume','Prepare me for an interview']};
 
   if(/what can you do|capabilit|everything you can|career surfaces|well.?rounded/.test(lower))return {message:'I can help across the full career lifecycle: choosing direction, proving capability, finding work, getting through screens and interviews, negotiating, advancing, switching fields, reentering after a break, building professional relationships, improving compensation, evaluating employers, and preserving future options. I adapt to the profession instead of assuming every career works like software.',type:'capabilities',coverage:surfaceCoverage(),advantage:advantage(engine,input),actions:['Assess my career health','Build my next-move plan','Find my strongest roles','Show my biggest career bottleneck','Help me earn more','Help me transition fields']};
 
-  if(/first job|start my career|starting my career|no experience|entry level|graduate|new career|apprentice/.test(lower))return {message:`I built a career-entry plan around ${targetLabel(engine)}. I separated hard credential gates from things we can prove through education, work samples, volunteering, assessments, references, transferable experience, projects, or other legitimate evidence.`,type:'career-start',advantage:advantage(engine,input),actions:['What should I prove first?','Which entry roles should I target?','Build my first resume','How do I get experience without already having the job?','Who should I talk to?']};
+  if(/first job|start my career|starting my career|no experience|entry level|graduate|new career|apprentice/.test(lower))return {message:`I built a career-entry plan around ${targetLabel(engine)}. I separated hard credential gates from things we can prove through education, work samples, volunteering, assessments, references, transferable experience, projects, or other legitimate evidence.`,type:'career-start',advantage:advantage(engine,input),decisionSupport:hiringDecisionSupport,actions:['What should I prove first?','Which entry roles should I target?','Build my first resume','How do I get experience without already having the job?','Who should I talk to?']};
 
-  if(/career change|change careers|switch careers|transition|pivot|move into|different field|different industry/.test(lower))return {message:'I mapped the transition by separating what already transfers, what needs translation into the target field’s language, what is genuinely missing, and what is a hard credential gate. We should close the smallest high-value proof gaps instead of making you restart from zero.',type:'career-transition',advantage:advantage(engine,input),actions:['Show my transferable strengths','Show the hard gates','What proof should I build?','Which transition role is easiest to win first?','Rewrite my story for the new field']};
+  if(/career change|change careers|switch careers|transition|pivot|move into|different field|different industry/.test(lower))return {message:'I mapped the transition by separating what already transfers, what needs translation into the target field’s language, what is genuinely missing, and what is a hard credential gate. We should close the smallest high-value proof gaps instead of making you restart from zero.',type:'career-transition',advantage:advantage(engine,input),decisionSupport:hiringDecisionSupport,actions:['Show my transferable strengths','Show the hard gates','What proof should I build?','Which transition role is easiest to win first?','Rewrite my story for the new field']};
 
-  if(/return to work|reenter|re-enter|career break|employment gap|laid off|layoff|unemployed|back to work/.test(lower))return {message:'I built a reentry plan that restores current proof, keeps the gap in proportion, and leads with what you can do now. We address the gap when it matters without letting it become your entire career story.',type:'career-reentry',advantage:advantage(engine,input),actions:['Fix my reentry narrative','Show me roles I can win now','What evidence should I refresh?','Help me explain the gap','Rebuild my network']};
+  if(/return to work|reenter|re-enter|career break|employment gap|laid off|layoff|unemployed|back to work/.test(lower))return {message:'I built a reentry plan that restores current proof, keeps the gap in proportion, and leads with what you can do now. We address the gap when it matters without letting it become your entire career story.',type:'career-reentry',advantage:advantage(engine,input),decisionSupport:hiringDecisionSupport,actions:['Fix my reentry narrative','Show me roles I can win now','What evidence should I refresh?','Help me explain the gap','Rebuild my network']};
 
   if(/promotion|advance|advancement|next level|raise|move up|leadership|manager|director|executive|internal mobility|internal role/.test(lower))return {message:'I built an advancement plan around next-level evidence, not title aspiration. It shows what value you already prove, what the next level demands, what evidence is missing, how to expand scope, how to prepare a promotion case, and when internal mobility or the external market gives you more leverage.',type:'career-advancement',advantage:advantage(engine,input),actions:['Build my promotion case','What next-level evidence am I missing?','Should I move internally or leave?','Help me ask for a raise','Map my next two career steps']};
 
@@ -94,7 +119,7 @@ export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):May
 
   if(/funnel|conversion|applications.*response|not getting interviews|no interviews|keep getting rejected|rejections|why.*not.*hired/.test(lower)){
     const plan=advantage(engine,input);
-    return {message:input.funnel?`I diagnosed the job-search funnel before changing strategy. The strongest current signal points to ${plan.funnel?.primaryFailureMode??'an uncertain failure mode'}, with ${plan.funnel?.confidence??0}% confidence.`:'Give me your recent application, recruiter-screen, interview, and offer counts. I’ll identify which stage is actually failing before we change the resume, targeting, networking, interview prep, or application volume.',type:'funnel-diagnosis',advantage:plan,actions:input.funnel?['Show the corrective actions','What should I stop doing?','Compare warm vs cold applications','Rebuild the failing stage']:['I can provide my numbers','Audit my targeting first','Audit my resume first']};
+    return {message:input.funnel?`I diagnosed the job-search funnel before changing strategy. The strongest current signal points to ${plan.funnel?.primaryFailureMode??'an uncertain failure mode'}, with ${plan.funnel?.confidence??0}% confidence.`:'Give me your recent application, recruiter-screen, interview, and offer counts. I’ll identify which stage is actually failing before we change the resume, targeting, networking, interview prep, or application volume.',type:'funnel-diagnosis',advantage:plan,decisionSupport:hiringDecisionSupport,actions:input.funnel?['Show the corrective actions','What should I stop doing?','Compare warm vs cold applications','Rebuild the failing stage']:['I can provide my numbers','Audit my targeting first','Audit my resume first']};
   }
 
   if(/github|repo|repository|portfolio.*code|code portfolio/.test(lower)){
@@ -117,12 +142,12 @@ export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):May
   if(/interview|practice interview|technical|behavioral|prepare|prep|screening call|phone screen/.test(lower)){
     const opportunity=findOpportunity(engine,message,input.opportunityId);if(!opportunity)return {message:'Choose a role or ask me to find strong opportunities first. I’ll tailor preparation to the actual profession and evaluation stages.',actions:['Find my best roles','Tell me the role manually']};
     const pkg=engine.package(opportunity.id);
-    return {message:`I prepared you for ${opportunity.job.title} at ${opportunity.job.company} using the actual requirements, likely decision stages, your strongest proof, likely objections, and evidence-backed stories.`,type:'interview',opportunity,readiness:pkg.readiness,interview:pkg.interview,practice:buildInterviewPractice(opportunity),universal:buildUniversalPlanFromEngine(engine,opportunity.id,{additionalEvidence:input.additionalEvidence}),actions:['Start with the first interview stage','Challenge my weakest area','Build my story bank','What questions should I ask them?','Explain likely objections']};
+    return {message:`I prepared you for ${opportunity.job.title} at ${opportunity.job.company} using the actual requirements, likely decision stages, your strongest proof, likely objections, and evidence-backed stories.`,type:'interview',opportunity,readiness:pkg.readiness,interview:pkg.interview,practice:buildInterviewPractice(opportunity),universal:buildUniversalPlanFromEngine(engine,opportunity.id,{additionalEvidence:input.additionalEvidence}),decisionSupport:hiringDecisionSupport,actions:['Start with the first interview stage','Challenge my weakest area','Build my story bank','What questions should I ask them?','Explain likely objections']};
   }
 
   if(/application question|screening question|employer question|application form|questionnaire/.test(lower)){
     const universal=universalFor(engine,input,message);if(!universal)return {message:'Choose an opportunity and give me the application questions. I’ll classify each one and answer from the same evidence package used everywhere else.',actions:['Find my best opportunity','I can paste the questions']};
-    return {message:'I compiled the application questions from the same evidence package used for your resume, outreach, and interview preparation so the story stays consistent. Eliminatory questions stay factual; positioning questions get the strongest defensible answer.',type:'application-questions',universal,actions:['Show the strongest answer first','Check every answer for consistency','Prepare follow-up interview proof']};
+    return {message:'I compiled the application questions from the same evidence package used for your resume, outreach, and interview preparation so the story stays consistent. Eliminatory questions stay factual; positioning questions get the strongest defensible answer.',type:'application-questions',universal,decisionSupport:hiringDecisionSupport,actions:['Show the strongest answer first','Check every answer for consistency','Prepare follow-up interview proof']};
   }
 
   if(/company|employer|salary|pay|culture|review|research|manager|team/.test(lower)){
@@ -134,8 +159,8 @@ export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):May
   if(/apply|application|tailor|cover letter|submit/.test(lower)){
     const opportunity=findOpportunity(engine,message,input.opportunityId);if(!opportunity)return {message:'Choose an opportunity first. I’ll build the application from one evidence package so the resume, answers, outreach, and interview story remain consistent.'};
     const pkg=engine.package(opportunity.id);const universal=buildUniversalPlanFromEngine(engine,opportunity.id,{additionalEvidence:input.additionalEvidence,applicationQuestions:input.applicationQuestions});
-    if(!pkg.readiness.canOccupyRole)return {message:`I do not recommend submitting yet. Your current readiness is ${pkg.readiness.readinessScore}/100. I’d rather identify whether the blockers are mandatory, quickly provable, trainable, or only employer wish-list items.`,type:'develop-first',opportunity,readiness:pkg.readiness,universal,actions:['Show the true blockers','Find a role I can pursue now','Build the smallest proof plan','Recheck wishlist requirements']};
-    return {message:`You are sufficiently ready for ${opportunity.job.title} at ${opportunity.job.company}. I prepared a consistent, evidence-grounded package with strongest-defensible positioning. Identity-bearing submission remains approval-gated.`,type:'application',opportunity,readiness:pkg.readiness,package:{resume:pkg.resume,application:pkg.application,outreach:pkg.outreach},universal,actions:['Request application approval','Find a human path first','Prepare for interview','Explain the strongest positioning choices']};
+    if(!pkg.readiness.canOccupyRole)return {message:`I do not recommend submitting yet. Your current readiness is ${pkg.readiness.readinessScore}/100. I’d rather identify whether the blockers are mandatory, quickly provable, trainable, or only employer wish-list items.`,type:'develop-first',opportunity,readiness:pkg.readiness,universal,decisionSupport:hiringDecisionSupport,actions:['Show the true blockers','Find a role I can pursue now','Build the smallest proof plan','Recheck wishlist requirements']};
+    return {message:`You are sufficiently ready for ${opportunity.job.title} at ${opportunity.job.company}. I prepared a consistent, evidence-grounded package with strongest-defensible positioning. Identity-bearing submission remains approval-gated.`,type:'application',opportunity,readiness:pkg.readiness,package:{resume:pkg.resume,application:pkg.application,outreach:pkg.outreach},universal,decisionSupport:hiringDecisionSupport,actions:['Request application approval','Find a human path first','Prepare for interview','Explain the strongest positioning choices']};
   }
 
   if(/status|today|next|pipeline|attention|follow.?up|my jobs|saved|what should i do now/.test(lower)){
@@ -151,7 +176,7 @@ export function deterministicMayaReply(engine:HiredEngine,input:MayaRequest):May
   if(/why|gap|weak|qualified|fit|evidence|ready|objection|competition|competitor/.test(lower)){
     const opportunity=findOpportunity(engine,message,input.opportunityId);if(!opportunity)return {message:'Ask me to find opportunities first, then I can explain exactly where you stand and what an employer is likely to question.'};
     const readiness=engine.assessReadiness(opportunity.id);
-    return {message:`${opportunity.job.title} at ${opportunity.job.company} is scored ${opportunity.score.total}/100 with role readiness ${readiness.readinessScore}/100. ${readiness.canOccupyRole?'I consider it selectively pursuable.':'I would not submit yet without resolving or validating the blocking gaps.'}`,type:'fit',opportunity,readiness,universal:buildUniversalPlanFromEngine(engine,opportunity.id,{additionalEvidence:input.additionalEvidence}),actions:['Show likely objections','Where do I beat competing candidates?','Where am I vulnerable?','Build the application','Show the smallest gap-closing action']};
+    return {message:`${opportunity.job.title} at ${opportunity.job.company} is scored ${opportunity.score.total}/100 with role readiness ${readiness.readinessScore}/100. ${readiness.canOccupyRole?'I consider it selectively pursuable.':'I would not submit yet without resolving or validating the blocking gaps.'}`,type:'fit',opportunity,readiness,universal:buildUniversalPlanFromEngine(engine,opportunity.id,{additionalEvidence:input.additionalEvidence}),decisionSupport:hiringDecisionSupport,actions:['Show likely objections','Where do I beat competing candidates?','Where am I vulnerable?','Build the application','Show the smallest gap-closing action']};
   }
 
   return {message:'Tell me the outcome you want. I can coordinate the whole career system conversationally: starting, reentering, switching careers, finding work, evidence building, resumes, applications, professional presence, relationships, interviews, negotiation, promotions, internal mobility, employer evaluation, compensation growth, and long-term career resilience.',type:'career-router',coverage:surfaceCoverage(),advantage:advantage(engine,input),actions:['Assess my career health','Find my best roles','Help me change careers','Help me move up','Audit my resume','Build my network','Prepare me for an interview']};
