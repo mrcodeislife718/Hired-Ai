@@ -141,3 +141,19 @@ export function mayaBiasContext(message: string) {
   const alternatives = analysis.signals.map(signal => `- Prefer: ${signal.jobRelevantAlternative}`).join('\n');
   return `HIRING BIAS / WEAK-PROXY CHECK\nAudience: ${analysis.audience}\n${facts}\n${inferences}\n${alternatives}\nPrinciple: ${analysis.principle}`;
 }
+
+export function deterministicBiasNotice(message: string) {
+  const analysis = analyzeHiringBias(message);
+  if (!analysis.detected) return '';
+  const primary = analysis.signals[0];
+  const extra = analysis.signals.length > 1 ? ` I also see ${analysis.signals.length - 1} additional weak-proxy risk${analysis.signals.length === 2 ? '' : 's'} in what you described.` : '';
+  if (analysis.audience === 'employer' || analysis.audience === 'recruiter') {
+    return `One hiring-quality warning: ${primary.observedFact} That fact does not by itself justify the inference that ${primary.unsupportedInference.charAt(0).toLowerCase()}${primary.unsupportedInference.slice(1)} ${primary.jobRelevantAlternative}${extra}`;
+  }
+  return `One thing I want to protect you from: some hiring processes may treat this as a negative proxy even when it does not directly predict job performance. ${primary.observedFact} That does not by itself mean ${primary.unsupportedInference.charAt(0).toLowerCase()}${primary.unsupportedInference.slice(1)} We should keep the context brief and lead with direct evidence of what you can do now.${extra}`;
+}
+
+export function applyDeterministicBiasGuidance(message: string, answer: string) {
+  const notice = deterministicBiasNotice(message);
+  return notice ? `${answer}\n\n${notice}` : answer;
+}
