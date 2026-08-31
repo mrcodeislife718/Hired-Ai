@@ -60,7 +60,7 @@ export class HiredRuntime {
 
   private async journalDispatch(approvalId:string,connectorId:string,capability:ConnectorCapability,payload:Record<string,unknown>,opportunityId:string|undefined,maxAttempts:number,at=new Date()){
     const idempotencyKey=this.dispatchKey(approvalId,connectorId,capability);
-    const journal=await this.outbox.enqueue({aggregateType:'approval',aggregateId:approvalId,action:`connector:${capability}`,idempotencyKey,payload:{approvalId,connectorId,capability,opportunityId,maxAttempts,payload}});
+    const journal=await this.outbox.enqueue({aggregateType:'approval',aggregateId:approvalId,action:`connector:${capability}`,idempotencyKey,payload:{approvalId,connectorId,capability,opportunityId,maxAttempts,payload},availableAt:at});
     const leased=await this.outbox.claimById(journal.id,this.workerId,30_000,at);
     return{idempotencyKey,journal:leased};
   }
@@ -93,7 +93,7 @@ export class HiredRuntime {
     const approval=this.engine.store.approvals.get(operation.approvalId);if(!approval)throw new Error('connector approval not found');
     const key=this.dispatchKey(operation.approvalId,operation.connectorId,operation.capability);
     const existing=await this.outbox.byIdempotencyKey(key);
-    const journal=existing??await this.outbox.enqueue({aggregateType:'approval',aggregateId:operation.approvalId,action:`connector:${operation.capability}`,idempotencyKey:key,payload:{approvalId:operation.approvalId,connectorId:operation.connectorId,capability:operation.capability,opportunityId:operation.opportunityId,maxAttempts:operation.maxAttempts,payload:approval.payload}});
+    const journal=existing??await this.outbox.enqueue({aggregateType:'approval',aggregateId:operation.approvalId,action:`connector:${operation.capability}`,idempotencyKey:key,payload:{approvalId:operation.approvalId,connectorId:operation.connectorId,capability:operation.capability,opportunityId:operation.opportunityId,maxAttempts:operation.maxAttempts,payload:approval.payload},availableAt:at});
     const leased=await this.outbox.claimById(journal.id,this.workerId,30_000,at);
     try{
       const result=await this.connectors.dispatch(operation.id,approval.payload,at);await this.settleJournal(leased,result,at);await this.checkpoint();return result;
