@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 import type { CandidateProfile, WorkMode } from './domain.js';
+import { applySchemaMigrations } from './schema-migrations.js';
 
 export type SubscriptionPlan = 'none' | 'career' | 'pro' | 'concierge';
 export type SubscriptionStatus = 'inactive' | 'active' | 'past_due' | 'canceled';
@@ -44,7 +45,7 @@ export class AccountStore {
   private migrated=false;
   constructor(private readonly jsonPath=process.env.HIRED_ACCOUNTS_FILE??'.data/hired-accounts.json',private readonly connectionString=process.env.DATABASE_URL){}
   private pool(){if(!this.connectionString)throw new Error('DATABASE_URL is not configured');return this.poolPromise??=import('pg').then(({Pool})=>new Pool({connectionString:this.connectionString,max:Number(process.env.HIRED_DB_POOL_MAX??12)}));}
-  private async migrate(){if(!this.connectionString||this.migrated)return;const pool=await this.pool();await pool.query(`create table if not exists hired_accounts (id text primary key,email text not null unique,password_salt text not null,password_hash text not null,profile jsonb not null,subscription jsonb not null,created_at timestamptz not null default now(),updated_at timestamptz not null default now())`);await pool.query(`create table if not exists hired_sessions (token_hash text primary key,account_id text not null references hired_accounts(id) on delete cascade,created_at timestamptz not null,expires_at timestamptz not null)`);await pool.query('create index if not exists hired_sessions_account_id_idx on hired_sessions(account_id)');await pool.query('create index if not exists hired_sessions_expires_at_idx on hired_sessions(expires_at)');this.migrated=true;}
+  private async migrate(){if(!this.connectionString||this.migrated)return;await applySchemaMigrations(await this.pool());this.migrated=true;}
   private restore(snapshot:AccountSnapshot){this.accounts.clear();this.byEmail.clear();this.sessions.clear();for(const account of snapshot.accounts??[]){this.accounts.set(account.id,account);this.byEmail.set(normalizeEmail(account.email),account.id);}const now=Date.now();for(const session of snapshot.sessions??[]){if(Date.parse(session.expiresAt)>now&&this.accounts.has(session.accountId))this.sessions.set(session.tokenHash,session);}}
   private snapshot():AccountSnapshot{return{accounts:[...this.accounts.values()],sessions:[...this.sessions.values()]};}
   private async loadFile(){if(this.loaded)return;try{this.restore(JSON.parse(await readFile(this.jsonPath,'utf8')) as AccountSnapshot);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}this.loaded=true;}
