@@ -6,6 +6,7 @@ import { applySchemaMigrations } from './schema-migrations.js';
 export interface EmployerPersistenceAdapter {
   load():Promise<EmployerPlatformSnapshot|undefined>;
   save(snapshot:EmployerPlatformSnapshot):Promise<void>;
+  mutate?(mutation:(current:EmployerPlatformSnapshot|undefined)=>EmployerPlatformSnapshot):Promise<EmployerPlatformSnapshot>;
   delete?():Promise<void>;
   close?():Promise<void>;
 }
@@ -22,6 +23,7 @@ export class JsonEmployerPersistence implements EmployerPersistenceAdapter {
     await writeFile(tmp,JSON.stringify(snapshot,null,2),'utf8');
     await rename(tmp,this.path);
   }
+  async mutate(mutation:(current:EmployerPlatformSnapshot|undefined)=>EmployerPlatformSnapshot){const next=mutation(await this.load());await this.save(next);return structuredClone(next);}
   async delete(){await rm(this.path,{force:true});}
 }
 
@@ -43,6 +45,18 @@ export class PostgresEmployerPersistence implements EmployerPersistenceAdapter {
        on conflict(id) do update set payload=excluded.payload,version=hired_employer_state.version+1,updated_at=now()`,
       ['primary',snapshot]
     );
+  }
+  async mutate(mutation:(current:EmployerPlatformSnapshot|undefined)=>EmployerPlatformSnapshot){
+    await this.migrate();const client=await(await this.pool()).connect();
+    try{
+      await client.query('begin');
+      // Serialize employer-domain writers across horizontally scaled instances.
+      await client.query(`select pg_advisory_xact_lock(hashtext('hired_employer_state:primary'))`);
+      const current=await client.query<{payload:EmployerPlatformSnapshot}>('select payload from hired_employer_state where id=$1 for update',['primary']);
+      const next=mutation(current.rows[0]?.payload);
+      await client.query(`insert into hired_employer_state(id,payload,version,updated_at) values($1,$2,1,now()) on conflict(id) do update set payload=excluded.payload,version=hired_employer_state.version+1,updated_at=now()`,['primary',next]);
+      await client.query('commit');return structuredClone(next);
+    }catch(error){await client.query('rollback').catch(()=>undefined);throw error;}finally{client.release();}
   }
   async delete(){await this.migrate();await(await this.pool()).query('delete from hired_employer_state where id=$1',['primary']);}
   async close(){if(this.poolPromise)await(await this.poolPromise).end();}
