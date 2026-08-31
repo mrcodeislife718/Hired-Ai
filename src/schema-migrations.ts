@@ -74,6 +74,21 @@ const migrations:SchemaMigration[]=[
       create index if not exists hired_outbox_ready_idx on hired_outbox(state,available_at);
       create index if not exists hired_outbox_aggregate_idx on hired_outbox(aggregate_type,aggregate_id);
     `
+  },
+  {
+    id:'0005_distributed_rate_limits',
+    description:'Create cross-instance request budget table',
+    sql:`
+      create table if not exists hired_rate_limits (
+        namespace text not null,
+        key text not null,
+        window_start bigint not null,
+        count integer not null,
+        updated_at timestamptz not null default now(),
+        primary key(namespace,key,window_start)
+      );
+      create index if not exists hired_rate_limits_cleanup_idx on hired_rate_limits(window_start);
+    `
   }
 ];
 
