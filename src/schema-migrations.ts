@@ -89,6 +89,16 @@ const migrations:SchemaMigration[]=[
       );
       create index if not exists hired_rate_limits_cleanup_idx on hired_rate_limits(window_start);
     `
+  },
+  {
+    id:'0006_billing_events',
+    description:'Create durable Stripe event idempotency ledger',
+    sql:`
+      create table if not exists hired_billing_events (
+        event_id text primary key,
+        processed_at timestamptz not null default now()
+      );
+    `
   }
 ];
 
