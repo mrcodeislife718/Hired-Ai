@@ -9,6 +9,7 @@ class MemoryEmployerPersistence implements EmployerPersistenceAdapter {
   saves=0;
   async load(){return this.snapshot?structuredClone(this.snapshot):undefined;}
   async save(snapshot:EmployerPlatformSnapshot){this.snapshot=structuredClone(snapshot);this.saves++;}
+  async mutate(mutation:(current:EmployerPlatformSnapshot|undefined)=>EmployerPlatformSnapshot){const next=mutation(this.snapshot?structuredClone(this.snapshot):undefined);this.snapshot=structuredClone(next);this.saves++;return structuredClone(next);}
 }
 
 const jobInput={
@@ -34,4 +35,15 @@ test('durable employer mutations persist before acknowledgement and survive recr
   assert.equal(restored.listJobs(org.id,'recruiter-1')[0]?.id,job.id);
   assert.equal(restored.candidateConsent('candidate-1')?.visibility,'matched-employers');
   assert.equal(restored.canOrganizationSourceCandidate('candidate-1',org.id),true);
+});
+
+test('durable employer writers replay against latest persisted state instead of overwriting one another',async()=>{
+  const persistence=new MemoryEmployerPersistence();
+  const first=await DurableEmployerPlatform.create(persistence);
+  const second=await DurableEmployerPlatform.create(persistence);
+  const a=await first.createOrganization('Alpha','owner-a');
+  const b=await second.createOrganization('Beta','owner-b');
+  const restored=await DurableEmployerPlatform.create(persistence);
+  assert.equal(restored.organization(a.id)?.name,'Alpha');
+  assert.equal(restored.organization(b.id)?.name,'Beta');
 });
