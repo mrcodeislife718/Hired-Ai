@@ -4,11 +4,12 @@ import { BillingEventLedger } from './billing-ledger.js';
 import { CommercialPlatform } from './commercial-platform.js';
 import { checkoutReady, commercialPlans, hasPlan, planById, type PlanId } from './commercial.js';
 import type { ConnectorCapability } from './connector-fabric.js';
-import { EmployerPlatform, type EmployerRole } from './employer-platform.js';
+import { DurableEmployerPlatform } from './durable-employer-platform.js';
+import type { EmployerRole } from './employer-platform.js';
 import { baseSecurityHeaders, clearSessionCookie, enforceOrigin, sessionCookie, sessionToken } from './http-security.js';
 import { MayaService, type MayaRequest } from './maya-service.js';
 import { MayaResumeStudio, type ResumeAccess, type ResumeTemplateId, type ResumeVariant } from './resume-studio.js';
-import { SlidingWindowLimiter } from './rate-limit.js';
+import { rateLimiterFromEnv, type AsyncRateLimiter } from './rate-limit.js';
 import { id } from './utils.js';
 import { renderMayaPage } from './web-ui.js';
 import type { CareerFact, CareerTwinSnapshot } from './career-twin.js';
@@ -29,10 +30,10 @@ import {
 const platform = new CommercialPlatform();
 const maya = new MayaService();
 const resumeStudio = new MayaResumeStudio();
-const employers = new EmployerPlatform();
+const employers = await DurableEmployerPlatform.create();
 const billingLedger = new BillingEventLedger();
-const authLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_AUTH_RATE_LIMIT ?? 12), 15 * 60_000);
-const apiLimiter = new SlidingWindowLimiter(Number(process.env.HIRED_API_RATE_LIMIT ?? 180), 60_000);
+const authLimiter = rateLimiterFromEnv(Number(process.env.HIRED_AUTH_RATE_LIMIT ?? 12), 15 * 60_000, 'auth');
+const apiLimiter = rateLimiterFromEnv(Number(process.env.HIRED_API_RATE_LIMIT ?? 180), 60_000, 'api');
 const CONNECTOR_CAPABILITIES = new Set<ConnectorCapability>(['submit-application','send-outreach','send-email','create-calendar-event','read-opportunities','read-employer-intelligence','read-compensation','verify-credential']);
 
 function sendJson(res: ServerResponse, status: number, payload: unknown, extra: Record<string,string> = {}) {
@@ -57,8 +58,8 @@ async function readJson<T=Record<string,unknown>>(req: IncomingMessage): Promise
   try { return JSON.parse(raw) as T; } catch { throw new Error('invalid JSON'); }
 }
 function clientKey(req: IncomingMessage) { return String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'; }
-function consume(limiter: SlidingWindowLimiter,key:string,res:ServerResponse){const result=limiter.consume(key);if(result.allowed)return true;sendJson(res,429,{error:'too many requests',retryAt:new Date(result.resetAt).toISOString()},{'retry-after':String(Math.max(1,Math.ceil((result.resetAt-Date.now())/1000)))});return false;}
-async function requireAccount(req:IncomingMessage,res:ServerResponse){const token=sessionToken(req);const account=await platform.accounts.accountForToken(token);if(!account){sendJson(res,401,{error:'sign in required'});return undefined;}if(!consume(apiLimiter,account.id,res))return undefined;return{account,token};}
+async function consume(limiter: AsyncRateLimiter,key:string,res:ServerResponse){const result=await limiter.consume(key);if(result.allowed)return true;sendJson(res,429,{error:'too many requests',retryAt:new Date(result.resetAt).toISOString()},{'retry-after':String(Math.max(1,Math.ceil((result.resetAt-Date.now())/1000)))});return false;}
+async function requireAccount(req:IncomingMessage,res:ServerResponse){const token=sessionToken(req);const account=await platform.accounts.accountForToken(token);if(!account){sendJson(res,401,{error:'sign in required'});return undefined;}if(!await consume(apiLimiter,account.id,res))return undefined;return{account,token};}
 function requireActivePlan(account:AccountRecord,res:ServerResponse,minimum:PlanId='career'){if(account.subscription.status==='active'&&hasPlan(account.subscription.plan,minimum))return true;sendJson(res,402,{error:'active subscription required',requiredPlan:minimum,subscription:account.subscription});return false;}
 function accountCookieHeaders(token:string,expiresAt:string){return{'set-cookie':sessionCookie(token,expiresAt)};}
 function resumeAccessFor(account: AccountRecord): ResumeAccess { return account.subscription.status === 'active' && account.subscription.plan !== 'none' ? account.subscription.plan as ResumeAccess : 'free'; }
@@ -67,13 +68,13 @@ async function handleStripeWebhook(req:IncomingMessage,res:ServerResponse){const
 
 async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(req.url??'/','http://localhost');try{
   if(req.method==='GET'&&url.pathname==='/')return sendHtml(res,renderMayaPage());
-  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true,proactiveCareerOS:true,connectorFabric:true}});
+  if(req.method==='GET'&&url.pathname==='/health')return sendJson(res,200,{ok:true,product:'Hired AI',agent:'Maya',persistence:process.env.DATABASE_URL?'postgres':'file',billing:checkoutReady(),languageModelConfigured:Boolean(process.env.OPENAI_API_KEY),telemetryConfigured:Boolean(process.env.HIRED_TELEMETRY_ENDPOINT),surfaces:{resumeStudio:true,careerTwin:true,savedJobs:true,watches:true,employerFoundation:true,employerDurableState:true,proactiveCareerOS:true,connectorFabric:true,transactionalOutbox:true,distributedRateLimit:Boolean(process.env.DATABASE_URL)}});
   if(req.method==='GET'&&url.pathname==='/api/plans')return sendJson(res,200,{plans:commercialPlans().map(({stripePriceId,...plan})=>({...plan,checkoutConfigured:Boolean(stripePriceId)})),billing:checkoutReady()});
   if(req.method==='POST'&&url.pathname==='/api/stripe/webhook')return handleStripeWebhook(req,res);
   if(req.method&&!['GET','HEAD','OPTIONS'].includes(req.method)&&!enforceOrigin(req,res))return;
 
   if(req.method==='POST'&&(url.pathname==='/api/auth/register'||url.pathname==='/api/auth/login')){
-    if(!consume(authLimiter,clientKey(req),res))return;
+    if(!await consume(authLimiter,clientKey(req),res))return;
     const body=await readJson<{email?:string;password?:string}>(req);const email=String(body.email??''),password=String(body.password??'');
     if(url.pathname.endsWith('/register')){const account=await platform.accounts.register(email,password);const session=await platform.accounts.createSession(account.id);return sendJson(res,201,{account:platform.accounts.publicAccount(account),expiresAt:session.expiresAt},accountCookieHeaders(session.token,session.expiresAt));}
     const session=await platform.accounts.login(email,password);const account=await platform.accounts.accountForToken(session.token);return sendJson(res,200,{account:account?platform.accounts.publicAccount(account):undefined,expiresAt:session.expiresAt},accountCookieHeaders(session.token,session.expiresAt));
@@ -113,13 +114,13 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(savedMatch&&req.method==='POST'){const body=await readJson<{notes?:string;priority?:'low'|'medium'|'high'}>(req);const result=engine.saveOpportunity(savedMatch[1],body.notes,body.priority);await runtime.checkpoint();return sendJson(res,201,result);}
   if(savedMatch&&req.method==='DELETE'){const result=engine.unsaveOpportunity(savedMatch[1]);await runtime.checkpoint();return sendJson(res,200,{removed:result});}
 
-  if(req.method==='POST'&&url.pathname==='/api/employer/organizations'){const body=await readJson<{name?:string}>(req);return sendJson(res,201,employers.createOrganization(String(body.name??''),account.id));}
+  if(req.method==='POST'&&url.pathname==='/api/employer/organizations'){const body=await readJson<{name?:string}>(req);return sendJson(res,201,await employers.createOrganization(String(body.name??''),account.id));}
   const orgMember=url.pathname.match(/^\/api\/employer\/organizations\/([^/]+)\/members$/);
-  if(orgMember&&req.method==='POST'){const body=await readJson<{accountId?:string;role?:EmployerRole}>(req);if(!body.accountId||!body.role||body.role==='owner')return sendJson(res,400,{error:'member accountId and non-owner role required'});return sendJson(res,201,employers.addMember(orgMember[1],account.id,body.accountId,body.role));}
+  if(orgMember&&req.method==='POST'){const body=await readJson<{accountId?:string;role?:EmployerRole}>(req);if(!body.accountId||!body.role||body.role==='owner')return sendJson(res,400,{error:'member accountId and non-owner role required'});return sendJson(res,201,await employers.addMember(orgMember[1],account.id,body.accountId,body.role));}
   const orgJobs=url.pathname.match(/^\/api\/employer\/organizations\/([^/]+)\/jobs$/);
   if(orgJobs&&req.method==='GET')return sendJson(res,200,{jobs:employers.listJobs(orgJobs[1],account.id)});
-  if(orgJobs&&req.method==='POST'){const body=await readJson<Record<string,unknown>>(req);return sendJson(res,201,employers.createJob(orgJobs[1],account.id,body as never));}
-  if(req.method==='PUT'&&url.pathname==='/api/candidate/sourcing-consent'){const body=await readJson<Record<string,unknown>>(req);return sendJson(res,200,employers.setCandidateConsent({...body,candidateId:account.profile.id,updatedAt:new Date().toISOString()} as never));}
+  if(orgJobs&&req.method==='POST'){const body=await readJson<Record<string,unknown>>(req);return sendJson(res,201,await employers.createJob(orgJobs[1],account.id,body as never));}
+  if(req.method==='PUT'&&url.pathname==='/api/candidate/sourcing-consent'){const body=await readJson<Record<string,unknown>>(req);return sendJson(res,200,await employers.setCandidateConsent({...body,candidateId:account.profile.id,updatedAt:new Date().toISOString()} as never));}
   if(req.method==='GET'&&url.pathname==='/api/candidate/sourcing-consent')return sendJson(res,200,employers.candidateConsent(account.profile.id)??{candidateId:account.profile.id,visibility:'private',allowedOrganizationIds:[],blockedOrganizationIds:[],shareCompensationTarget:false,shareCareerPreferences:false});
 
   if(!requireActivePlan(account,res,'career'))return;
@@ -149,11 +150,10 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   const connectorDispatch=url.pathname.match(/^\/api\/approvals\/([^/]+)\/connector-dispatch$/);
   if(connectorDispatch&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{connectorId?:string;capability?:string;maxAttempts?:number}>(req);const connectorId=String(body.connectorId??'').trim(),capability=String(body.capability??'') as ConnectorCapability;if(!connectorId)return sendJson(res,400,{error:'connectorId required'});if(!CONNECTOR_CAPABILITIES.has(capability))return sendJson(res,400,{error:'supported connector capability required'});const result=await runtime.dispatchApproved(connectorDispatch[1],connectorId,capability,body.maxAttempts);return sendJson(res,200,{operation:result,delivery:{state:engine.governor.deliveryState(connectorDispatch[1]),history:engine.governor.deliveryHistory(connectorDispatch[1])},confirmedReceived:result.state==='verified-received'});}
   const delivery=url.pathname.match(/^\/api\/approvals\/([^/]+)\/delivery$/);if(delivery&&req.method==='GET'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,200,{state:engine.governor.deliveryState(delivery[1]),history:engine.governor.deliveryHistory(delivery[1])});}
-  const providerAck=url.pathname.match(/^\/api\/approvals\/([^/]+)\/provider-acknowledged$/);if(providerAck&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.providerAcknowledged(providerAck[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:false});}
-  const verifiedReceipt=url.pathname.match(/^\/api\/approvals\/([^/]+)\/verified-received$/);if(verifiedReceipt&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const body=await readJson<{provider?:string;providerMessageId?:string;detail?:string}>(req);const result=engine.governor.verifyReceived(verifiedReceipt[1],String(body.provider??''),String(body.providerMessageId??''),body.detail);await runtime.checkpoint();return sendJson(res,200,{delivery:result,confirmedReceived:true});}
-  const execute=url.pathname.match(/^\/api\/approvals\/([^/]+)\/execute$/);if(execute&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;const payload=engine.governor.executeApproved(execute[1]);await runtime.checkpoint();return sendJson(res,200,{payload,note:'authorized payload released to external connector boundary; no external send is claimed'});}
+  const legacyDeliveryMutation=/^\/api\/approvals\/[^/]+\/(provider-acknowledged|verified-received|execute)$/.test(url.pathname);
+  if(legacyDeliveryMutation&&req.method==='POST'){if(!requireActivePlan(account,res,'pro'))return;return sendJson(res,410,{error:'direct delivery-state mutation is disabled; use governed connector-dispatch so provider acknowledgement and verified receipt originate from the connector boundary'});}
   return sendJson(res,404,{error:'not found'});
 }catch(error){const message=error instanceof Error?error.message:String(error);const status=/credentials|sign in|required authentication/i.test(message)?401:/permission denied/i.test(message)?403:/not found/i.test(message)?404:/too large/i.test(message)?413:400;return sendJson(res,status,{error:message});}}
 
 const port=Number(process.env.PORT??3000);const server=createServer((req,res)=>{void route(req,res);});server.listen(port,()=>console.log(`Hired AI / Maya listening on http://localhost:${port}`));
-for(const signal of ['SIGINT','SIGTERM'] as const)process.on(signal,()=>{server.close(()=>{void platform.close().finally(()=>process.exit(0));});});
+for(const signal of ['SIGINT','SIGTERM'] as const)process.on(signal,()=>{server.close(()=>{void Promise.allSettled([platform.close(),employers.close(),billingLedger.close(),authLimiter.close?.()??Promise.resolve(),apiLimiter.close?.()??Promise.resolve()]).finally(()=>process.exit(0));});});

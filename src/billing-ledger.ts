@@ -1,10 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { applySchemaMigrations } from './schema-migrations.js';
 
 export class BillingEventLedger {
   private loaded = false;
   private events = new Set<string>();
   private poolPromise?: Promise<import('pg').Pool>;
+  private migrated=false;
 
   constructor(
     private readonly jsonPath = process.env.HIRED_BILLING_LEDGER_FILE ?? '.data/hired-billing-events.json',
@@ -17,9 +19,9 @@ export class BillingEventLedger {
   }
 
   private async migrate() {
-    if (!this.connectionString) return;
-    const pool = await this.pool();
-    await pool.query('create table if not exists hired_billing_events (event_id text primary key, processed_at timestamptz not null default now())');
+    if (!this.connectionString||this.migrated) return;
+    await applySchemaMigrations(await this.pool());
+    this.migrated=true;
   }
 
   private async load() {
@@ -44,8 +46,7 @@ export class BillingEventLedger {
     if (!eventId) throw new Error('billing event id required');
     if (this.connectionString) {
       await this.migrate();
-      const pool = await this.pool();
-      const result = await pool.query('insert into hired_billing_events(event_id) values($1) on conflict do nothing returning event_id', [eventId]);
+      const result = await (await this.pool()).query('insert into hired_billing_events(event_id) values($1) on conflict do nothing returning event_id', [eventId]);
       return result.rowCount === 1;
     }
     await this.load();
@@ -59,8 +60,7 @@ export class BillingEventLedger {
     if (!eventId) return;
     if (this.connectionString) {
       await this.migrate();
-      const pool = await this.pool();
-      await pool.query('delete from hired_billing_events where event_id=$1', [eventId]);
+      await (await this.pool()).query('delete from hired_billing_events where event_id=$1', [eventId]);
       return;
     }
     await this.load();

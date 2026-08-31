@@ -1,119 +1,118 @@
 # Hired AI commercial launch runbook
 
-Hired AI is commercially launchable when the product is deployed, payment collection is configured, customer-facing policies are published, and the qualification suite passes in the deployed configuration.
+Hired AI is commercially launchable only when the exact release commit is deployed, billing and data infrastructure are live, customer-facing policies match actual data flows, and `docs/PRODUCTION_QUALIFICATION.md` has environment-specific evidence.
 
 ## Product sold
 
 **Hired AI** is the Career Operating System. **Maya** is the customer-facing AI Career Agent.
 
-The first paid offer is intentionally simple and paid-only:
+The commercial objective is **verified hiring conversations and better career outcomes with less wasted effort**. Application count is not a north-star metric.
 
 | Plan | Price | Positioning |
 | --- | ---: | --- |
-| Career | $19/month | Career intelligence, selective job matching, resume modernization, professional-presence guidance, interview preparation and development plans |
-| Pro | $49/month | Adds relationship intelligence, governed acquisition workflows, follow-up orchestration, outcome learning and offer support |
+| Career | $19/month | Career intelligence, selective opportunity matching, resume modernization, professional-presence guidance, interview preparation and development plans |
+| Pro | $49/month | Adds relationship intelligence, governed acquisition routes, human-access workflows, follow-up orchestration, outcome learning and offer support |
 | Concierge | $149/month | Adds high-touch human-review workflows for high-impact career decisions |
 
-Pricing is a launch hypothesis and must be updated from conversion, retention, support cost and outcome evidence.
+Pricing remains a launch hypothesis until conversion, retention, support cost and outcome evidence establish otherwise.
 
-## Revenue activation
+## Billing truth
 
-Create recurring checkout/payment links with the chosen payment provider and set:
+Current code uses Stripe subscription Checkout rather than static payment links. Production configuration requires:
 
 ```bash
-HIRED_CHECKOUT_CAREER=https://...
-HIRED_CHECKOUT_PRO=https://...
-HIRED_CHECKOUT_CONCIERGE=https://...
+APP_URL=https://...
+STRIPE_SECRET_KEY=sk_test_... # test mode first
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_CAREER=price_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_CONCIERGE=price_...
 ```
 
-The application exposes `/api/plans` and `/api/checkout` and will only claim a plan has checkout enabled when its URL is configured.
+Implemented code includes Checkout Session creation, Billing Portal creation, signed webhook verification, durable webhook-event idempotency, subscription-state mapping, account entitlement storage and plan enforcement.
 
-For the first paid cohort, external payment pages are acceptable because they let Hired AI collect revenue without putting payment-card data inside the application. Before scaling beyond an early cohort, add verified subscription webhooks, durable entitlement state, cancellation handling, invoices/receipts, dunning, tax handling, and account-level access enforcement.
+This implementation is **not evidence of a successful live/test Stripe round trip**. Before charging customers, complete the Stripe test-mode sequence in `PRODUCTION_QUALIFICATION.md`.
 
-## Deployment configuration
+## Production environment
 
-Minimum recommended production environment:
+Minimum configuration:
 
 ```bash
+NODE_ENV=production
+APP_URL=https://...
 PORT=3000
 DATABASE_URL=postgres://...
-HIRED_API_KEY=<strong-random-secret>
-HIRED_DEMO=false
-GITHUB_TOKEN=...
+
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_CAREER=price_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_CONCIERGE=price_...
+
+# At least one authorized discovery source for acquisition-network qualification
 GREENHOUSE_BOARDS=...
-LEVER_COMPANIES=...
-HIRED_CHECKOUT_CAREER=https://...
-HIRED_CHECKOUT_PRO=https://...
-HIRED_CHECKOUT_CONCIERGE=https://...
+# or LEVER_COMPANIES=...
+# or JOB_JSON_FEEDS=...
+
+# At least one authorized governed provider adapter for external-action qualification
+HIRED_CONNECTORS_JSON=[...]
+
+# Production telemetry collector/bridge
+HIRED_TELEMETRY_ENDPOINT=https://...
+HIRED_TELEMETRY_TOKEN=...
 ```
 
-Only grant connector scopes actually required by the product. Keep secrets out of source control.
+`OPENAI_API_KEY` remains optional because deterministic Maya behavior is designed to function without a model provider. If a language model is enabled, its use does not relax evidence, approval, or truth boundaries.
+
+Run `npm run commercial:check` to validate configuration shape. That command intentionally does not declare production readiness.
 
 ## Before accepting the first customer
 
-Run:
+Repository evidence:
 
 ```bash
 npm ci
 npm run check
-npm run serve
+npm run commercial:check
 ```
 
-Verify:
+Environment evidence must additionally verify:
 
-- `/health` returns `ok: true`
-- Maya loads at `/`
-- resume attachment/audit works
-- selective opportunity decisions render
-- role-readiness gating blocks an unsupported application
-- governed application requests require approval
-- all configured checkout links open the correct paid plan
-- demo data is disabled in production
-- database persistence survives restart
-- logs do not expose resume contents, API keys or payment secrets
-- privacy and terms pages presented to customers match the actual production data flows
+- deployed `/health` returns `ok:true`;
+- account signup/login/session isolation works across restart;
+- durable employer organization/job/consent state survives restart and concurrent writes;
+- Stripe test checkout → webhook → entitlement → portal/cancellation round trip succeeds;
+- at least one authorized real job source produces current opportunities with provenance;
+- at least one governed connector performs an approved external action and records provider/verified receipt truth;
+- outbox crash/retry tests do not duplicate identity-bearing actions;
+- production telemetry receives redacted traces/metrics and alerts on failures;
+- managed backup and restore drill succeeds;
+- privacy/terms reflect the deployed data flows;
+- incident/support ownership is established.
 
 ## First revenue cohort
 
-Start with a deliberately small cohort so outcome evidence is collected before aggressive growth.
+Start deliberately small. Measure at minimum:
 
-Track at minimum:
-
-- visitor -> paid conversion
-- activation: user gives Maya enough evidence to produce a career plan
-- qualified opportunities surfaced
-- percentage marked pursue / develop-first / skip
-- resume modernization completion
-- useful new professional relationships
-- application-to-screen conversion
-- screen-to-interview conversion
-- offer conversion
-- time-to-interview
-- time-to-offer
-- user hours saved
-- subscription retention
-- refund/cancellation reasons
+- visitor → paid conversion;
+- activation to enough evidence for a useful career plan;
+- qualified opportunities surfaced;
+- human-access routes identified;
+- application-bottleneck detection frequency;
+- response rate by warm introduction / direct hiring-manager / recruiter / formal-application route;
+- screen, interview and offer conversion by route;
+- time to first real hiring conversation;
+- time to offer;
+- candidate hours saved;
+- subscription retention;
+- refunds/cancellations;
+- provider/model cost per active customer;
+- support burden and incident rate.
 
 ## Commercial claim rule
 
-Hired AI may describe its architecture and capabilities. It must not claim superior hiring outcomes, a guaranteed job, guaranteed interviews, or guaranteed compensation improvement until measured evidence supports the specific claim.
+Hired AI may accurately describe implemented and verified architecture. It must not claim guaranteed jobs, guaranteed interviews, guaranteed compensation improvement, or superior hiring outcomes without measured evidence supporting that exact claim.
 
-The commercial north star is **better measurable career outcomes with less wasted effort**, not application volume.
+## Current boundary
 
-## Remaining scale gates
-
-The first paid cohort can launch with configured external recurring checkout links. Broader scale requires:
-
-- account authentication and recovery
-- durable per-user tenancy rather than a single local candidate seed
-- verified billing webhooks and entitlements
-- production-grade encrypted secrets
-- user-controlled privacy, export and deletion flows
-- durable conversation/career memory per account
-- real authorized job-source coverage beyond demo data
-- production model/voice provider configuration
-- support and incident process
-- reviewed privacy policy and terms
-- deployment monitoring, backups and restore exercises
-
-Do not label these scale gates complete until they are implemented and verified in the actual production environment.
+Repository qualification and live production qualification are different states. Do not mark external items complete because a unit/integration test passes. Live deployment, Stripe round trips, managed backup/restore, provider traffic, telemetry receipt, customer policies and real outcome evidence remain environment-specific gates until captured.

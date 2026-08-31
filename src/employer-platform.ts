@@ -11,7 +11,8 @@ import {
   type CapabilityEvidence,
   type HiringOutcomeObservation,
   type HiringRequirement,
-  type DecisionType
+  type DecisionType,
+  type FairnessAuditEvent
 } from './bias-resistant-hiring.js';
 
 export type EmployerRole = 'owner' | 'admin' | 'recruiter' | 'hiring-manager' | 'viewer';
@@ -50,6 +51,13 @@ export interface CandidateSourcingConsent {
   updatedAt: string;
 }
 
+export interface EmployerPlatformSnapshot {
+  organizations: EmployerOrganization[];
+  jobs: EmployerJob[];
+  consent: CandidateSourcingConsent[];
+  fairness: Array<{organizationId:string;events:FairnessAuditEvent[]}>;
+}
+
 const permissions: Record<EmployerRole, Set<string>> = {
   owner: new Set(['org:manage','members:manage','job:write','candidate:source','candidate:view','analytics:view']),
   admin: new Set(['members:manage','job:write','candidate:source','candidate:view','analytics:view']),
@@ -70,6 +78,32 @@ export class EmployerPlatform {
   private readonly jobs = new Map<string, EmployerJob>();
   private readonly consent = new Map<string, CandidateSourcingConsent>();
   private readonly fairness = new Map<string, FairnessAuditTrail>();
+
+  constructor(snapshot?:EmployerPlatformSnapshot){if(snapshot)this.restore(snapshot);}
+
+  restore(snapshot:EmployerPlatformSnapshot){
+    this.organizations.clear();this.jobs.clear();this.consent.clear();this.fairness.clear();
+    for(const org of snapshot.organizations??[]){this.organizations.set(org.id,structuredClone(org));this.fairness.set(org.id,new FairnessAuditTrail());}
+    for(const job of snapshot.jobs??[])this.jobs.set(job.id,structuredClone(job));
+    for(const consent of snapshot.consent??[])this.consent.set(consent.candidateId,structuredClone(consent));
+    for(const entry of snapshot.fairness??[]){
+      const trail=this.fairness.get(entry.organizationId)??new FairnessAuditTrail();
+      // Preserve historical timestamps during recovery without exposing mutation publicly.
+      const target=(trail as unknown as {events:FairnessAuditEvent[]}).events;
+      target.push(...structuredClone(entry.events??[]));
+      this.fairness.set(entry.organizationId,trail);
+    }
+    return this.snapshot();
+  }
+
+  snapshot():EmployerPlatformSnapshot{
+    return {
+      organizations:[...this.organizations.values()].map(value=>structuredClone(value)),
+      jobs:[...this.jobs.values()].map(value=>structuredClone(value)),
+      consent:[...this.consent.values()].map(value=>structuredClone(value)),
+      fairness:[...this.fairness.entries()].map(([organizationId,trail])=>({organizationId,events:trail.list()}))
+    };
+  }
 
   createOrganization(name: string, ownerAccountId: string) {
     if (!name.trim() || !ownerAccountId) throw new Error('organization name and owner required');
