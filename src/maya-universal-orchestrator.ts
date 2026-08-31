@@ -60,7 +60,7 @@ export function buildMayaUniversalPlan(input: MayaUniversalPlanInput) {
   const learning=calibrateLearning(experiments.length, experiments.length ? conversionModel.screenProbability-.5 : 0);
   const acquisitionRoute=input.acquisition?new AcquisitionRoutePlanner(input.acquisition.graph).plan({
     organizationId:input.acquisition.organizationId,
-    opportunityId:input.opportunity.job.id,
+    opportunityId:input.opportunity.id,
     candidatePersonId:input.acquisition.candidatePersonId,
     fitConfidence:input.acquisition.fitConfidence,
     evidenceStrength:input.acquisition.evidenceStrength,
