@@ -10,5 +10,6 @@ test('schema migration manifest is ordered unique and covers production infrastr
   assert.ok(ids.includes('0003_employer_state'));
   assert.ok(ids.includes('0004_outbox'));
   assert.ok(ids.includes('0005_distributed_rate_limits'));
+  assert.ok(ids.includes('0006_billing_events'));
   assert.ok(manifest.every(item=>/^[a-f0-9]{64}$/.test(item.checksum)));
 });
