@@ -67,11 +67,11 @@ export class HiredRuntime {
 
   private async settleJournal(journal:OutboxCommand,result:ConnectorOperation,at=new Date()){
     if(journal.state==='delivered')return journal;
-    if(result.state==='verified-received'||result.state==='provider-acknowledged')return this.outbox.delivered(journal.id,this.workerId);
-    if(result.state==='dead-letter')return this.outbox.retry(journal.id,this.workerId,result.deadLetterReason??result.lastError??'connector dead-lettered',1000,1);
+    if(result.state==='verified-received'||result.state==='provider-acknowledged')return this.outbox.delivered(journal.id,this.workerId,at);
+    if(result.state==='dead-letter')return this.outbox.retry(journal.id,this.workerId,result.deadLetterReason??result.lastError??'connector dead-lettered',1000,1,at);
     if(result.state==='retrying'){
       const delay=result.nextAttemptAt?Math.max(1000,Date.parse(result.nextAttemptAt)-at.getTime()):1000;
-      return this.outbox.retry(journal.id,this.workerId,result.lastError??'connector retry scheduled',delay,Math.max(1,result.maxAttempts));
+      return this.outbox.retry(journal.id,this.workerId,result.lastError??'connector retry scheduled',delay,Math.max(1,result.maxAttempts),at);
     }
     return journal;
   }
@@ -84,7 +84,7 @@ export class HiredRuntime {
     const operation=this.connectors.prepare({connectorId,capability,approvalId,opportunityId:approval.opportunityId,payload:approval.payload,idempotencyKey,maxAttempts});
     try{
       const result=await this.connectors.dispatch(operation.id,approval.payload,at);await this.settleJournal(journal,result,at);await this.checkpoint();return result;
-    }catch(error){if(journal.state!=='delivered')await this.outbox.retry(journal.id,this.workerId,error instanceof Error?error.message:String(error),1000,maxAttempts).catch(()=>undefined);throw error;}
+    }catch(error){if(journal.state!=='delivered')await this.outbox.retry(journal.id,this.workerId,error instanceof Error?error.message:String(error),1000,maxAttempts,at).catch(()=>undefined);throw error;}
   }
 
   async retryConnectorOperation(operationId:string,at=new Date()){
@@ -97,7 +97,7 @@ export class HiredRuntime {
     const leased=await this.outbox.claimById(journal.id,this.workerId,30_000,at);
     try{
       const result=await this.connectors.dispatch(operation.id,approval.payload,at);await this.settleJournal(leased,result,at);await this.checkpoint();return result;
-    }catch(error){if(leased.state!=='delivered')await this.outbox.retry(leased.id,this.workerId,error instanceof Error?error.message:String(error),1000,operation.maxAttempts).catch(()=>undefined);throw error;}
+    }catch(error){if(leased.state!=='delivered')await this.outbox.retry(leased.id,this.workerId,error instanceof Error?error.message:String(error),1000,operation.maxAttempts,at).catch(()=>undefined);throw error;}
   }
 
   snapshot():StoreSnapshot{return {...this.engine.store.snapshot(),...this.engine.durableState(),deliveryEvents:this.engine.governor.deliveryEvents(),connectorFabric:this.connectors.snapshot()};}
