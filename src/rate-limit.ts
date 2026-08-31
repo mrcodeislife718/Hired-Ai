@@ -1,3 +1,5 @@
+import { applySchemaMigrations } from './schema-migrations.js';
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -33,10 +35,13 @@ export class SlidingWindowLimiter {
   }
 }
 
-/**
- * Cross-instance limiter for production action budgets. Uses one atomic UPSERT
- * per key/window so horizontally scaled workers enforce the same budget.
- */
+export class AsyncLocalRateLimiter implements AsyncRateLimiter {
+  private readonly local:SlidingWindowLimiter;
+  constructor(limit:number,windowMs:number){this.local=new SlidingWindowLimiter(limit,windowMs);}
+  async consume(key:string,now=Date.now()){return this.local.consume(key,now);}
+}
+
+/** Cross-instance production request budget backed by one atomic PostgreSQL UPSERT. */
 export class PostgresFixedWindowLimiter implements AsyncRateLimiter {
   private poolPromise?:Promise<import('pg').Pool>;
   private migrated=false;
@@ -46,7 +51,7 @@ export class PostgresFixedWindowLimiter implements AsyncRateLimiter {
     if(!Number.isFinite(windowMs)||windowMs<1000)throw new Error('rate limit window must be at least 1 second');
   }
   private pool(){return this.poolPromise??=import('pg').then(({Pool})=>new Pool({connectionString:this.connectionString,max:4}));}
-  private async migrate(){if(this.migrated)return;await(await this.pool()).query(`create table if not exists hired_rate_limits(namespace text not null,key text not null,window_start bigint not null,count integer not null,updated_at timestamptz not null default now(),primary key(namespace,key,window_start))`);this.migrated=true;}
+  private async migrate(){if(this.migrated)return;await applySchemaMigrations(await this.pool());this.migrated=true;}
   async consume(key:string,now=Date.now()):Promise<RateLimitResult>{
     await this.migrate();
     const normalized=key||'anonymous';
@@ -57,4 +62,10 @@ export class PostgresFixedWindowLimiter implements AsyncRateLimiter {
     return{allowed:count<=this.limit,remaining:Math.max(0,this.limit-count),resetAt:windowStart+this.windowMs};
   }
   async close(){if(this.poolPromise)await(await this.poolPromise).end();}
+}
+
+export function rateLimiterFromEnv(limit:number,windowMs:number,namespace:string):AsyncRateLimiter{
+  return process.env.DATABASE_URL
+    ? new PostgresFixedWindowLimiter(process.env.DATABASE_URL,limit,windowMs,namespace)
+    : new AsyncLocalRateLimiter(limit,windowMs);
 }
