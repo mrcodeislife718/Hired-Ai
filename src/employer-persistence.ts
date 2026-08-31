@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { EmployerPlatformSnapshot } from './employer-platform.js';
+import { applySchemaMigrations } from './schema-migrations.js';
 
 export interface EmployerPersistenceAdapter {
   load():Promise<EmployerPlatformSnapshot|undefined>;
@@ -29,17 +30,7 @@ export class PostgresEmployerPersistence implements EmployerPersistenceAdapter {
   private migrated=false;
   constructor(private readonly connectionString=process.env.DATABASE_URL){if(!connectionString)throw new Error('DATABASE_URL is required');}
   private pool(){return this.poolPromise??=import('pg').then(({Pool})=>new Pool({connectionString:this.connectionString,max:Number(process.env.HIRED_DB_POOL_MAX??12)}));}
-  private async migrate(){
-    if(this.migrated)return;
-    const pool=await this.pool();
-    await pool.query(`create table if not exists hired_employer_state (
-      id text primary key,
-      payload jsonb not null,
-      version bigint not null default 1,
-      updated_at timestamptz not null default now()
-    )`);
-    this.migrated=true;
-  }
+  private async migrate(){if(this.migrated)return;await applySchemaMigrations(await this.pool());this.migrated=true;}
   async load(){
     await this.migrate();
     const result=await(await this.pool()).query<{payload:EmployerPlatformSnapshot}>('select payload from hired_employer_state where id=$1',['primary']);
