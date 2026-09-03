@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
   CommercialOutcomeProofLedger,
   buildCommercialOutcomeReport,
-  qualifyComparativeRate,
   type CareerProofEvent
 } from '../src/commercial-outcome-proof.js';
 
@@ -31,7 +30,7 @@ test('commercial outcome proof ledger is idempotent and tamper evident', () => {
   assert.throws(() => CommercialOutcomeProofLedger.restore(tampered), /integrity/i);
 });
 
-test('commercial outcome report measures the full career value funnel from verified evidence only', () => {
+test('commercial outcome report measures verified user value across the career lifecycle', () => {
   const events: CareerProofEvent[] = [
     event({ id:'r1', subjectId:'u1', type:'opportunity_recommended', occurredAt:'2026-01-01T00:00:00Z', opportunityId:'j1' }),
     event({ id:'r2', subjectId:'u1', type:'opportunity_useful', occurredAt:'2026-01-01T01:00:00Z', opportunityId:'j1' }),
@@ -65,22 +64,4 @@ test('commercial outcome report measures the full career value funnel from verif
   assert.equal(report.medianCompensationImprovementPercent, 20);
   assert.equal(report.medianUserTimeSavedMinutes, 45);
   assert.equal(report.medianPostHireSatisfaction, 9);
-});
-
-test('technical superiority stays unqualified until comparative sample thresholds are met', () => {
-  const candidate = { numerator:20, denominator:25, rate:0.8 };
-  const comparator = { numerator:15, denominator:25, rate:0.6 };
-  const early = qualifyComparativeRate('applicationToScreenConversion', candidate, comparator);
-  assert.equal(early.qualified, false);
-  assert.match(early.reason, /at least 30 observations/i);
-
-  const qualified = qualifyComparativeRate(
-    'applicationToScreenConversion',
-    { numerator:80, denominator:100, rate:0.8 },
-    { numerator:60, denominator:100, rate:0.6 },
-    { minimumSamples:50, minimumAbsoluteLift:0.05 }
-  );
-  assert.equal(qualified.qualified, true);
-  assert.ok((qualified.absoluteLift ?? 0) > 0.19);
-  assert.ok((qualified.relativeLift ?? 0) > 0.3);
 });

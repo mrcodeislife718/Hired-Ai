@@ -31,6 +31,22 @@ Maya, help me get promoted and earn more.
 Maya, what should I do next?
 ```
 
+## User-value operating system
+
+Technical superiority is a means. **User value is the objective.**
+
+Every feature should answer a business question before an engineering question:
+
+> Does this get the user closer to the outcome they came here for? Does it reduce effort, increase success probability, improve trust, save time, increase income, or create compounding career advantage?
+
+If not, it does not deserve priority merely because it is technically interesting.
+
+Hired AI now has a deterministic user-value orchestration layer that ranks available interventions by expected outcome progress, success probability, effort reduction, trust, time saved, income upside, retention and strategic compounding while penalizing unnecessary friction and authority-bearing actions. The selected intervention is passed into Maya's runtime as the preferred next move. Maya translates that into a clear action rather than exposing internal scoring machinery.
+
+The intended experience becomes:
+
+> **Tell Maya what you want. Maya figures out the highest-value next move, prepares as much as possible, asks only for what is actually required, and keeps the journey moving.**
+
 ## Universal career intelligence
 
 Hired AI does **not** assume software, engineering, technology, office work, or any other single profession is the default. Healthcare, skilled trades, education, retail, hospitality, finance, public service, logistics, manufacturing, creative work, sales, legal, scientific, technical, and other careers are first-class contexts.
@@ -56,11 +72,27 @@ The web experience provides:
 
 The architecture may contain many specialized engines. The user should experience one continuous Career Operating System.
 
+## Proactive career execution
+
+Maya should not wait for the user to reverse-engineer the next question. When enough verified context exists, she should identify the highest-value next move and help execute it.
+
+Resume tailoring, application preparation, interview preparation, follow-up, opportunity comparison, negotiation, career planning, evidence building, gig transition work and employer workflows should compose inside one continuous conversation. Hired AI should prepare work before asking the user to do it, and ask only for information or authorization that is actually required.
+
+Identity-bearing external actions remain governed. Near-zero friction does not mean removing consent, evidence, legal gates or user authority.
+
 ## Long-horizon continuity
 
 Maya does not need the entire conversation archive stuffed into every turn. She selectively persists durable context such as explicit career goals, communication preferences, strategies, commitments, milestones, outcomes, and recurring career patterns, then retrieves only what is relevant to the current decision.
 
 Long-term memory is source-bound and user-correctable. Users can correct or ask Maya to forget remembered context. Conversational memory never becomes verified professional evidence by itself, cannot satisfy credential or licensing gates, and must not infer sensitive traits or private facts.
+
+Career continuity follows:
+
+```text
+dream → readiness → proof → access → interview → offer → employment → advancement
+```
+
+The lifecycle stage is not enough by itself. Hired AI combines lifecycle state with a user-value plan so Maya can choose the action most likely to produce meaningful forward motion with the least unnecessary friction.
 
 ## Career Advantage
 
@@ -75,6 +107,28 @@ The Career Advantage layer helps answer five larger questions:
 5. **How do I stay resilient?** Keep evidence current, relationships healthy, bargaining power visible, and more than one credible career path available.
 
 Maya can also diagnose which stage of a job-search funnel is failing before changing strategy. Weak application-to-screen conversion should not trigger the same intervention as strong screening conversion followed by weak interview performance.
+
+## Candidate value
+
+Candidates do not come to Hired AI because they want more recruiting software. They want better work, more income, stronger positioning, fewer wasted applications, better interviews, realistic career paths and continuity from somebody who remembers the whole journey.
+
+Hired AI therefore treats these as first-class product outcomes:
+
+- highest-value next action without requiring the user to ask the perfect question
+- one-conversation execution instead of tool switching
+- personalization from the user's verified outcomes and conversion history
+- direct introductions, referrals, recruiter relationships, gigs, institutional pipelines and verified applications as opportunity-access routes
+- smallest high-value gap closure instead of generic curriculum dumping
+- truthful confidence support, rehearsal, celebration and calibration
+- compensation, negotiation, promotion, career-transition and long-term optionality gains
+
+## Gig-worker value
+
+Gig work is legitimate career and economic activity. Gig workers need more paid utilization, better clients, repeat business, less dead time, portable proof, higher income and a path to something bigger when they want it.
+
+Hired AI can prioritize higher-value clients, reduce unpaid coordination, turn verified completed work into portable evidence, identify platform-concentration risk, support independent-business pathways and translate gig evidence into salaried-career transitions.
+
+GigFlow remains the dedicated gig-economy operational platform; Hired AI owns the person's broader career relationship and can consume authorized gig evidence or opportunities.
 
 ## Strongest-defensible candidate advocacy
 
@@ -116,8 +170,27 @@ Supports promotion evidence, internal mobility, next-level scope, leadership pro
 ### Outcome Learning
 Learns from applications, screens, interviews, assessments, work trials, rejections, offers, compensation, relationships, time-to-response, post-hire satisfaction, advancement, and retention without overfitting sparse data.
 
-### Commercial Outcome Proof
-Builds verified outcome evidence from the same lifecycle rather than relying on marketing claims. The proof ledger is idempotent and tamper-evident, excludes unverified events from measured results, measures the career funnel and long-horizon outcomes, and refuses comparative-superiority qualification until both Hired AI and the comparator meet configured sample thresholds.
+### User Value Orchestration
+Scores available actions against outcome progress, success probability, effort reduction, trust, time saved, income upside, retention and strategic compounding. The purpose is not to maximize feature usage. The purpose is to choose the most useful next move and reduce unnecessary friction.
+
+### Verified Outcome Intelligence
+Builds verified outcome evidence from the career lifecycle. The outcome ledger is idempotent and tamper-evident, excludes unverified events from measured results, and measures the career funnel plus long-horizon outcomes such as compensation improvement, time saved, satisfaction, retention, promotion and mobility. Its purpose is to learn what improves user outcomes, not to manufacture public comparisons with competitors.
+
+## Employer and startup value
+
+A startup should be able to hire well without first building a recruiting department. An employer should spend its time making good decisions, not moving data between tools.
+
+Hired AI can translate a role into evidence-backed requirements, identify credible candidates, create explainable shortlists, coordinate sourcing, use structured interviews or job-relevant assessments where appropriate, explain what evidence supports a fit, and reduce screening waste and bad-hire risk.
+
+The central employer question remains:
+
+> **What credible evidence do we have that this person can perform this job?**
+
+## Institution value
+
+Schools, nonprofits, workforce organizations and training providers need participants to convert learning into durable employment. They also need defensible evidence of whether their programs worked.
+
+Hired AI can connect training completion to proof, readiness, employer access, interview preparation, application execution and longitudinal employment outcomes while preserving participant consent. Program learning should focus on placement, retention, advancement and which interventions actually improve participant careers.
 
 ## Application intelligence stack
 
@@ -181,6 +254,8 @@ Maya is designed to fail closed around consequential actions and to avoid learni
 
 A more aggressive application variant does not become preferred merely because it produced a response. Materially false claims remain prohibited regardless of conversion.
 
+Competitive research is internal design intelligence unless the founder explicitly requests customer-facing comparison functionality. Hired AI may study strong products to understand useful capabilities or weaknesses, but those competitors do not become Hired AI's product identity.
+
 ## Commercial and employer capabilities
 
 Hired AI includes candidate and employer-side foundations for accounts, subscriptions, organization permissions, candidate-consent controls, employer role management, sourcing, screening, hiring collaboration, and post-hire outcomes. Candidate visibility and identity-bearing actions remain permissioned.
@@ -194,6 +269,8 @@ The repository includes:
 - source-bound long-horizon relationship memory with local and PostgreSQL durability
 - cross-industry universal career intelligence
 - Career Twin and durable career outcomes
+- user-value orchestration across candidate, gig-worker, employer and institution workflows
+- proactive highest-value next-action selection inside Career Success Continuity
 - opportunity discovery, reliability, scoring, readiness, and saved watches
 - evidence-backed positioning and application compilation
 - profession-neutral interview and application-question intelligence
@@ -202,7 +279,7 @@ The repository includes:
 - PostgreSQL persistence when configured, with local durable storage where supported
 - Stripe subscription and webhook verification
 - tenant-isolated accounts, sessions, conversation history, and long-term memory
-- verified commercial-outcome proof ledger, funnel metrics, long-horizon outcome metrics, and comparative qualification gates
+- verified outcome ledger, career-funnel metrics and long-horizon outcome metrics without competitor/public-superiority qualification machinery
 - Node 22/24 CI
 - a production-integrity gate that rejects production fixture files, unfinished implementation markers, hard-coded candidate fixtures, and regression to dashboard-style primary UI
 
@@ -250,31 +327,34 @@ The check path builds TypeScript, runs the test suite, and executes the producti
 
 1. Maya is the conversational Career Operating System and primary customer interface.
 2. Conversation is the operating surface, not a chatbot wrapper around separate career software.
-3. Every customer-facing career capability should be usable conversationally.
-4. Treat every profession and industry as first-class.
-5. Optimize for durable career outcomes, not engagement or application volume.
-6. Advocate for the candidate as strongly as the evidence defensibly allows.
-7. Never replace a mandatory credential with positioning.
-8. Compile material claims from attributable evidence and preserve consistency across artifacts.
-9. Diagnose the failing career or hiring stage before changing strategy.
-10. Prefer the smallest high-value proof action over generic skill accumulation.
-11. Professional relationships are durable career assets, not spam channels.
-12. External identity-bearing actions require authorization and verified execution.
-13. Important recommendations must be explainable and uncertainty must remain visible.
-14. Learn from real outcomes without overfitting sparse samples.
-15. Long-term memory must be selective, source-bound, user-correctable, and separate from verified professional evidence.
-16. Payment may buy service, never distort organic fit ranking or truth.
-17. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention, and long-term optionality.
-18. Comparative superiority is a measured claim: architecture may justify testing, but only verified comparative outcome evidence may justify the claim itself.
+3. Technical superiority exists to create more user value; technical novelty is not an end in itself.
+4. Every customer-facing career capability should be usable conversationally.
+5. Treat every profession and industry as first-class.
+6. Optimize for durable career outcomes, not engagement or application volume.
+7. Proactively identify the highest-value next move instead of requiring the user to ask the perfect question.
+8. Reduce unnecessary user work and tool switching; prepare first and ask only for what is actually required.
+9. Advocate for the candidate as strongly as the evidence defensibly allows.
+10. Never replace a mandatory credential with positioning.
+11. Compile material claims from attributable evidence and preserve consistency across artifacts.
+12. Diagnose the failing career or hiring stage before changing strategy.
+13. Prefer the smallest high-value proof action over generic skill accumulation.
+14. Professional relationships are durable career assets, not spam channels.
+15. External identity-bearing actions require authorization and verified execution.
+16. Important recommendations must be explainable and uncertainty must remain visible.
+17. Learn from real outcomes without overfitting sparse samples.
+18. Long-term memory must be selective, source-bound, user-correctable, and separate from verified professional evidence.
+19. Payment may buy service, never distort organic fit ranking or truth.
+20. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention and long-term optionality.
+21. Competitive research is an engineering and business input, not customer-facing product identity unless explicitly requested.
 
-## Commercial proof standard
+## Outcome intelligence standard
 
-Hired AI should not claim technical superiority from architecture alone. It should earn that claim through measured results: opportunity precision, useful relationship creation, application-to-screen conversion, screen-to-interview conversion, interview-to-offer conversion, offer-to-hire conversion, time-to-interview, time-to-offer, compensation improvement, career-transition success, promotion outcomes, user time saved, post-hire satisfaction, retention, and long-term career mobility.
+Hired AI should measure whether it is improving the outcomes users actually care about: opportunity usefulness, useful relationship creation, application-to-screen conversion, interview conversion, offer conversion, time-to-interview, time-to-offer, compensation improvement, career-transition success, promotion outcomes, user time saved, post-hire satisfaction, retention and long-term career mobility.
 
-The commercial proof layer accepts source-linked outcome events, deduplicates retries by event identity, detects conflicting reuse of an event ID, integrity-hashes snapshots, and excludes unverified events from outcome reports. Comparative rate claims remain explicitly unqualified until both Hired AI and the comparator have enough measured observations and the configured improvement threshold is exceeded. This keeps product evidence, sales claims, and technical-superiority claims tied to measured reality.
+The verified outcome layer accepts source-linked outcome events, deduplicates retries by event identity, detects conflicting reuse of an event ID, integrity-hashes snapshots and excludes unverified events from outcome reports. Those signals exist to improve Maya, personalize interventions, understand which workflows produce value and strengthen the business through better user outcomes.
 
 ## Canonical direction
 
 **Hired AI helps people build stronger careers. Maya is the conversational Career Operating System through which they do it.**
 
-The product should keep absorbing useful career functionality into one coherent, evidence-backed relationship until asking Maya is easier and more effective than operating separate job boards, resume tools, application trackers, career coaches, networking tools, and advancement workflows.
+The product should keep absorbing useful career functionality into one coherent, evidence-backed relationship until asking Maya is easier and more effective than operating separate job boards, resume tools, application trackers, career coaches, networking tools, interview tools, recruiting workflows and advancement systems.

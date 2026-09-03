@@ -62,29 +62,6 @@ export interface CommercialOutcomeReport {
   medianPostHireSatisfaction: number | null;
 }
 
-export interface ComparativeQualification {
-  metric: keyof Pick<CommercialOutcomeReport,
-    | 'opportunityPrecision'
-    | 'usefulRelationshipCreation'
-    | 'applicationToScreenConversion'
-    | 'screenToInterviewConversion'
-    | 'interviewToOfferConversion'
-    | 'offerToHireConversion'
-    | 'careerTransitionSuccess'
-    | 'promotionOutcomeRate'
-    | 'retention30d'
-    | 'retention90d'
-    | 'retention365d'
-    | 'careerMobilityRate'>;
-  candidate: RateMetric;
-  comparator: RateMetric;
-  minimumSamples: number;
-  absoluteLift: number | null;
-  relativeLift: number | null;
-  qualified: boolean;
-  reason: string;
-}
-
 export interface CommercialProofSnapshot {
   version: 1;
   events: CareerProofEvent[];
@@ -102,7 +79,7 @@ function stable(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function hashEvents(events: CareerProofEvent[]): string {
+function hashEvents(events: CareerProofEvent[]) {
   return createHash('sha256').update(stable(events)).digest('hex');
 }
 
@@ -239,25 +216,4 @@ export function buildCommercialOutcomeReport(allEvents: CareerProofEvent[]): Com
     medianUserTimeSavedMinutes: median(timeSaved),
     medianPostHireSatisfaction: median(satisfaction)
   };
-}
-
-export function qualifyComparativeRate(
-  metricName: ComparativeQualification['metric'],
-  candidate: RateMetric,
-  comparator: RateMetric,
-  options: { minimumSamples?: number; minimumAbsoluteLift?: number } = {}
-): ComparativeQualification {
-  const minimumSamples = options.minimumSamples ?? 30;
-  const minimumAbsoluteLift = options.minimumAbsoluteLift ?? 0;
-  const enoughSamples = candidate.denominator >= minimumSamples && comparator.denominator >= minimumSamples;
-  const comparable = candidate.rate !== null && comparator.rate !== null;
-  const absoluteLift = comparable ? candidate.rate! - comparator.rate! : null;
-  const relativeLift = comparable && comparator.rate! > 0 ? absoluteLift! / comparator.rate! : null;
-  const qualified = Boolean(enoughSamples && comparable && absoluteLift! > minimumAbsoluteLift);
-  let reason = 'Candidate rate is not yet proven superior.';
-  if (!comparable) reason = 'Both candidate and comparator require measurable denominators.';
-  else if (!enoughSamples) reason = `Both candidate and comparator require at least ${minimumSamples} observations before a superiority claim.`;
-  else if (absoluteLift! <= minimumAbsoluteLift) reason = `Observed lift does not exceed the required absolute lift of ${minimumAbsoluteLift}.`;
-  else reason = 'Observed comparative rate exceeds the configured evidence threshold.';
-  return { metric: metricName, candidate, comparator, minimumSamples, absoluteLift, relativeLift, qualified, reason };
 }
