@@ -28,7 +28,14 @@ export interface AggregateInsight {
   confidence: 'low'|'medium'|'high';
 }
 
+export interface InsightNetworkSnapshot {
+  version: 1;
+  events: InsightEvent[];
+  integrityDigest: string;
+}
+
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const canonicalDigest = (events: InsightEvent[]) => hash(JSON.stringify([...events].sort((a,b)=>a.id.localeCompare(b.id))));
 
 export function analyticsEligible(event: InsightEvent) {
   return event.analyticsConsent && !event.sensitive;
@@ -68,4 +75,42 @@ export function aggregateInsights(events: InsightEvent[], minimumCohortSize = 5)
 
 export function buildTrainingCorpus(events: InsightEvent[]) {
   return events.filter(trainingEligible).map(event => pseudonymousInsightEvent(event));
+}
+
+/**
+ * Replayable insight ledger. Production storage may persist this snapshot in Postgres or the
+ * existing durable runtime; duplicate event ids are rejected so retries do not double-count outcomes.
+ */
+export class CareerInsightLedger {
+  private readonly byId = new Map<string,InsightEvent>();
+
+  constructor(snapshot?: InsightNetworkSnapshot) {
+    if (snapshot) {
+      if (snapshot.version !== 1) throw new Error('unsupported insight snapshot version');
+      if (canonicalDigest(snapshot.events) !== snapshot.integrityDigest) throw new Error('insight snapshot integrity mismatch');
+      for (const event of snapshot.events) this.append(event);
+    }
+  }
+
+  append(event: InsightEvent) {
+    if (!event.id.trim()) throw new Error('insight event id is required');
+    if (!event.subjectId.trim()) throw new Error('insight event subject is required');
+    if (Number.isNaN(Date.parse(event.occurredAt))) throw new Error('insight event occurredAt must be valid ISO time');
+    const previous = this.byId.get(event.id);
+    if (previous) {
+      if (JSON.stringify(previous) !== JSON.stringify(event)) throw new Error(`conflicting duplicate insight event: ${event.id}`);
+      return previous;
+    }
+    const stored = structuredClone(event);
+    this.byId.set(stored.id,stored);
+    return stored;
+  }
+
+  all() { return [...this.byId.values()].sort((a,b)=>a.occurredAt.localeCompare(b.occurredAt)); }
+  aggregates(minimumCohortSize = 5) { return aggregateInsights(this.all(),minimumCohortSize); }
+  trainingCorpus() { return buildTrainingCorpus(this.all()); }
+  snapshot(): InsightNetworkSnapshot {
+    const events=this.all();
+    return {version:1,events,integrityDigest:canonicalDigest(events)};
+  }
 }
