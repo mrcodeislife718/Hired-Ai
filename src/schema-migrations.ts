@@ -99,6 +99,15 @@ const migrations:SchemaMigration[]=[
         processed_at timestamptz not null default now()
       );
     `
+  },
+  {
+    id:'0007_stripe_customer_ownership',
+    description:'Prevent one Stripe customer from being bound to multiple accounts',
+    sql:`
+      create unique index if not exists hired_accounts_stripe_customer_unique
+        on hired_accounts ((subscription->>'customerRef'))
+        where nullif(subscription->>'customerRef','') is not null;
+    `
   }
 ];
 

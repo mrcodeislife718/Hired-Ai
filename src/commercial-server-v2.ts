@@ -64,7 +64,31 @@ function requireActivePlan(account:AccountRecord,res:ServerResponse,minimum:Plan
 function accountCookieHeaders(token:string,expiresAt:string){return{'set-cookie':sessionCookie(token,expiresAt)};}
 function resumeAccessFor(account: AccountRecord): ResumeAccess { return account.subscription.status === 'active' && account.subscription.plan !== 'none' ? account.subscription.plan as ResumeAccess : 'free'; }
 
-async function handleStripeWebhook(req:IncomingMessage,res:ServerResponse){const raw=await readRaw(req,2_000_000);const event=parseStripeEvent(raw,req.headers['stripe-signature'] as string|undefined);const claimed=await billingLedger.claim(event.id);if(!claimed)return sendJson(res,200,{received:true,duplicate:true});try{if(event.type==='checkout.session.completed'){const session=event.data.object as unknown as StripeCheckoutSession;const accountId=accountIdFromMetadata(session.metadata);const plan=planFromMetadata(session.metadata);if(accountId&&plan!=='none')await platform.accounts.setSubscription(accountId,plan,'active',session.customer??undefined);}if(event.type==='customer.subscription.created'||event.type==='customer.subscription.updated'||event.type==='customer.subscription.deleted'){const subscription=event.data.object as unknown as StripeSubscription;const accountId=accountIdFromMetadata(subscription.metadata);const plan=planFromMetadata(subscription.metadata);if(accountId)await platform.accounts.setSubscription(accountId,plan,subscriptionState(subscription.status),subscription.customer);}return sendJson(res,200,{received:true});}catch(error){await billingLedger.release(event.id);throw error;}}
+async function handleStripeWebhook(req:IncomingMessage,res:ServerResponse){
+  const raw=await readRaw(req,2_000_000);
+  const event=parseStripeEvent(raw,req.headers['stripe-signature'] as string|undefined);
+  const claimed=await billingLedger.claim(event.id);
+  if(!claimed)return sendJson(res,200,{received:true,duplicate:true});
+  try{
+    if(event.type==='checkout.session.completed'){
+      const session=event.data.object as unknown as StripeCheckoutSession;
+      const accountId=accountIdFromMetadata(session.metadata);
+      const plan=planFromMetadata(session.metadata);
+      if(accountId&&plan!=='none')await platform.accounts.linkBillingIdentifiers(accountId,{customerRef:session.customer??undefined,subscriptionRef:session.subscription??undefined});
+    }
+    if(event.type==='customer.subscription.created'||event.type==='customer.subscription.updated'||event.type==='customer.subscription.deleted'){
+      const subscription=event.data.object as unknown as StripeSubscription;
+      const accountId=accountIdFromMetadata(subscription.metadata);
+      const plan=planFromMetadata(subscription.metadata);
+      if(accountId){
+        const state=subscriptionState(subscription.status);
+        if(plan==='none'&&state!=='canceled')throw new Error('Stripe subscription plan metadata is invalid');
+        await platform.accounts.setSubscription(accountId,plan,state,subscription.customer,{subscriptionRef:subscription.id,eventCreatedAt:event.created});
+      }
+    }
+    return sendJson(res,200,{received:true});
+  }catch(error){await billingLedger.release(event.id);throw error;}
+}
 
 async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(req.url??'/','http://localhost');try{
   if(req.method==='GET'&&url.pathname==='/')return sendHtml(res,renderMayaPage());
