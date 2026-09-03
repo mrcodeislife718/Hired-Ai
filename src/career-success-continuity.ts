@@ -1,6 +1,8 @@
 import { chooseSupportMode, type SupportPlan } from './maya-support-mode.js';
 import { buildGigCareerPlan, type GigCareerPlan, type GigProfile, type GigSignal } from './gig-career.js';
 import { employerGrowthPlan } from './employer-growth-pricing.js';
+import { buildUserValuePlan, candidateValueInterventions, type UserValuePlan } from './user-value-orchestrator.js';
+import { gigWorkerValueInterventions } from './gig-user-value.js';
 
 export type CareerSuccessStage = 'dream'|'readiness'|'proof'|'access'|'interview'|'offer'|'employment'|'advancement';
 
@@ -18,6 +20,8 @@ export interface CareerSuccessContinuityInput {
   verifiedWins?: string[];
   recentSetbacks?: number;
   highStakesEventSoon?: boolean;
+  materialGap?: string;
+  directAccessAvailable?: boolean;
   gigProfile?: GigProfile;
   gigSignals?: GigSignal[];
 }
@@ -30,6 +34,7 @@ export interface CareerSuccessContinuityPlan {
   nextStage?: CareerSuccessStage;
   nextActions: string[];
   continuitySummary: string;
+  userValue: UserValuePlan;
   gig?: GigCareerPlan;
   employerGrowthReference: typeof employerGrowthPlan;
 }
@@ -67,6 +72,47 @@ function actionsFor(stage: CareerSuccessStage, target?: string) {
   return map[stage];
 }
 
+function inferMaterialGap(message: string) {
+  const match = message.match(/(?:missing|need|lack|gap)(?:\s+(?:a|an|the))?\s+([^.!?]{3,80})/i);
+  return match?.[1]?.trim();
+}
+
+function buildValuePlan(input: CareerSuccessContinuityInput, stage: CareerSuccessStage, gig?: GigCareerPlan): UserValuePlan {
+  if (gig) {
+    return buildUserValuePlan({
+      audience:'gig-worker',
+      objective:input.targetCareer,
+      stage,
+      availableInterventions:gigWorkerValueInterventions({
+        idleTimeHigh:/idle|dead time|not getting gigs|slow week/i.test(input.message),
+        repeatCustomersAvailable:/repeat customer|repeat client/i.test(input.message),
+        platformConcentrationHigh:/only platform|depend on .*platform|platform risk/i.test(input.message),
+        portableProofWeak:/no proof|weak proof|ratings only|portfolio/i.test(input.message),
+        wantsIndependentBusiness:/own business|independent business|my own company|go direct/i.test(input.message),
+        wantsSalariedTransition:/salary|salaried|full[- ]time job|transition.*job/i.test(input.message)
+      })
+    });
+  }
+
+  return buildUserValuePlan({
+    audience:'candidate',
+    objective:input.targetCareer,
+    stage,
+    availableInterventions:candidateValueInterventions({
+      target:input.targetCareer,
+      stage,
+      opportunityAvailable:stage === 'access' || /job|role|opportunity|opening/i.test(input.message),
+      materialGap:input.materialGap ?? inferMaterialGap(input.message),
+      interviewSoon:stage === 'interview' || /interview.*(?:today|tomorrow|soon|this week)/i.test(input.message),
+      offerAvailable:stage === 'offer' || /offer/i.test(input.message),
+      compensationUpsideAvailable:/salary|compensation|pay|raise|negotiate|promotion/i.test(input.message),
+      repeatedSetbacks:(input.recentSetbacks ?? 0) > 1 || /rejected|keep getting rejected|no interviews|discouraged/i.test(input.message),
+      applicationReady:stage === 'access' && /apply|application|submit/i.test(input.message),
+      directAccessAvailable:input.directAccessAvailable
+    })
+  });
+}
+
 export function buildCareerSuccessContinuity(input: CareerSuccessContinuityInput): CareerSuccessContinuityPlan {
   const stage = inferCareerSuccessStage(input);
   const index = order.indexOf(stage);
@@ -74,9 +120,12 @@ export function buildCareerSuccessContinuity(input: CareerSuccessContinuityInput
   const nextStage = index < order.length - 1 ? order[index + 1] : undefined;
   const support = chooseSupportMode({message:input.message,verifiedWins:input.verifiedWins,recentSetbacks:input.recentSetbacks,highStakesEventSoon:input.highStakesEventSoon});
   const gig = input.gigProfile ? buildGigCareerPlan(input.gigProfile,input.gigSignals ?? []) : undefined;
-  const nextActions = [...actionsFor(stage,input.targetCareer),...(gig?.nextMoves.slice(0,2) ?? [])];
-  const continuitySummary = `Current stage: ${stage}. ${input.targetCareer ? `Target: ${input.targetCareer}. ` : ''}${nextStage ? `Next lifecycle stage: ${nextStage}.` : 'Maintain advancement and long-term career optionality.'}`;
-  return {stage,targetCareer:input.targetCareer,support,completedStages,nextStage,nextActions,continuitySummary,gig,employerGrowthReference:employerGrowthPlan};
+  const userValue = buildValuePlan(input,stage,gig);
+  const lifecycleActions = [...actionsFor(stage,input.targetCareer),...(gig?.nextMoves.slice(0,2) ?? [])];
+  const valueAction = userValue.primary?.label;
+  const nextActions = valueAction ? [valueAction,...lifecycleActions.filter(action => action !== valueAction)] : lifecycleActions;
+  const continuitySummary = `Current stage: ${stage}. ${input.targetCareer ? `Target: ${input.targetCareer}. ` : ''}${nextStage ? `Next lifecycle stage: ${nextStage}. ` : 'Maintain advancement and long-term career optionality. '}${userValue.primary ? `Highest-value next move: ${userValue.primary.label}.` : ''}`;
+  return {stage,targetCareer:input.targetCareer,support,completedStages,nextStage,nextActions,continuitySummary,userValue,gig,employerGrowthReference:employerGrowthPlan};
 }
 
 function collectStrings(value: unknown, keyPattern: RegExp, depth = 0): string[] {
@@ -98,6 +147,7 @@ function collectStrings(value: unknown, keyPattern: RegExp, depth = 0): string[]
 export function continuityFromStructuredContext(message: string, context: unknown): CareerSuccessContinuityPlan {
   const goals = collectStrings(context,/goal|target|preferredtitle/i);
   const eventText = collectStrings(context,/checkpoint|kind|type|status|label|text/i).join(' | ').toLowerCase();
+  const gaps = collectStrings(context,/gap|missing|blocker|requirement/i);
   const milestones:ContinuityMilestone[]=[];
   if(goals.length) milestones.push({kind:'goal',label:goals[0],verified:false});
   if(/assessment|credential|badge|evidence|certification|completed gig|repeat customer/.test(eventText)) milestones.push({kind:/gig/.test(eventText)?'gig':'proof',label:'durable proof present in career context',verified:true});
@@ -106,5 +156,12 @@ export function continuityFromStructuredContext(message: string, context: unknow
   if(/offer/.test(eventText)) milestones.push({kind:'offer',label:'offer outcome present in career context',verified:true});
   if(/hired|accepted|started the job|employment/.test(eventText)) milestones.push({kind:'hire',label:'employment outcome present in career context',verified:true});
   if(/promotion|promoted/.test(eventText)) milestones.push({kind:'promotion',label:'advancement outcome present in career context',verified:true});
-  return buildCareerSuccessContinuity({message,targetCareer:goals[0],milestones});
+  return buildCareerSuccessContinuity({
+    message,
+    targetCareer:goals[0],
+    milestones,
+    materialGap:gaps[0],
+    directAccessAvailable:/referral|introduction|recruiter relationship|employer pipeline/.test(eventText),
+    highStakesEventSoon:/interview|assessment|negotiation/.test(eventText)
+  });
 }
