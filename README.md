@@ -116,6 +116,9 @@ Supports promotion evidence, internal mobility, next-level scope, leadership pro
 ### Outcome Learning
 Learns from applications, screens, interviews, assessments, work trials, rejections, offers, compensation, relationships, time-to-response, post-hire satisfaction, advancement, and retention without overfitting sparse data.
 
+### Commercial Outcome Proof
+Builds verified outcome evidence from the same lifecycle rather than relying on marketing claims. The proof ledger is idempotent and tamper-evident, excludes unverified events from measured results, measures the career funnel and long-horizon outcomes, and refuses comparative-superiority qualification until both Hired AI and the comparator meet configured sample thresholds.
+
 ## Application intelligence stack
 
 For a specific opportunity Maya can coordinate:
@@ -199,6 +202,7 @@ The repository includes:
 - PostgreSQL persistence when configured, with local durable storage where supported
 - Stripe subscription and webhook verification
 - tenant-isolated accounts, sessions, conversation history, and long-term memory
+- verified commercial-outcome proof ledger, funnel metrics, long-horizon outcome metrics, and comparative qualification gates
 - Node 22/24 CI
 - a production-integrity gate that rejects production fixture files, unfinished implementation markers, hard-coded candidate fixtures, and regression to dashboard-style primary UI
 
@@ -261,10 +265,13 @@ The check path builds TypeScript, runs the test suite, and executes the producti
 15. Long-term memory must be selective, source-bound, user-correctable, and separate from verified professional evidence.
 16. Payment may buy service, never distort organic fit ranking or truth.
 17. Success means better access, interviews, offers, compensation, fulfillment, advancement, retention, and long-term optionality.
+18. Comparative superiority is a measured claim: architecture may justify testing, but only verified comparative outcome evidence may justify the claim itself.
 
 ## Commercial proof standard
 
-Hired AI should not claim technical superiority from architecture alone. It should earn that claim through measured results: opportunity precision, useful relationship creation, application-to-screen conversion, interview conversion, offer conversion, time-to-interview, time-to-offer, compensation improvement, career-transition success, promotion outcomes, user time saved, post-hire satisfaction, retention, and long-term career mobility.
+Hired AI should not claim technical superiority from architecture alone. It should earn that claim through measured results: opportunity precision, useful relationship creation, application-to-screen conversion, screen-to-interview conversion, interview-to-offer conversion, offer-to-hire conversion, time-to-interview, time-to-offer, compensation improvement, career-transition success, promotion outcomes, user time saved, post-hire satisfaction, retention, and long-term career mobility.
+
+The commercial proof layer accepts source-linked outcome events, deduplicates retries by event identity, detects conflicting reuse of an event ID, integrity-hashes snapshots, and excludes unverified events from outcome reports. Comparative rate claims remain explicitly unqualified until both Hired AI and the comparator have enough measured observations and the configured improvement threshold is exceeded. This keeps product evidence, sales claims, and technical-superiority claims tied to measured reality.
 
 ## Canonical direction
 
