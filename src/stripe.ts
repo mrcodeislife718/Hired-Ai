@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { AccountRecord, SubscriptionPlan, SubscriptionStatus } from './accounts.js';
 import type { PlanId } from './commercial.js';
 import { planById } from './commercial.js';
+import type { EmployerSubscriptionPlan } from './employer-platform.js';
 
 const API = 'https://api.stripe.com/v1';
 const env = (key: string) => process.env[key]?.trim() || undefined;
@@ -76,6 +77,27 @@ export async function createCheckoutSession(account: AccountRecord, planId: Plan
   return stripeRequest<StripeCheckoutSession>('/checkout/sessions', values);
 }
 
+export async function createEmployerCheckoutSession(account:AccountRecord,organizationId:string,plan:Exclude<EmployerSubscriptionPlan,'free'>):Promise<StripeCheckoutSession>{
+  if(!organizationId.trim())throw new Error('employer organization id required');
+  const priceId=env(`STRIPE_EMPLOYER_PRICE_${plan.toUpperCase()}`);
+  if(!priceId)throw new Error(`Stripe employer price is not configured for ${plan}`);
+  const values=new URLSearchParams({
+    mode:'subscription',
+    'line_items[0][price]':priceId,
+    'line_items[0][quantity]':'1',
+    customer_email:account.email,
+    client_reference_id:organizationId,
+    'metadata[organization_id]':organizationId,
+    'metadata[employer_plan]':plan,
+    'subscription_data[metadata][organization_id]':organizationId,
+    'subscription_data[metadata][employer_plan]':plan,
+    success_url:`${appUrl()}/?employer_billing=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url:`${appUrl()}/?employer_billing=canceled`,
+    allow_promotion_codes:'true'
+  });
+  return stripeRequest<StripeCheckoutSession>('/checkout/sessions',values);
+}
+
 export async function createBillingPortal(customerId: string): Promise<{ id: string; url: string }> {
   if (!customerId) throw new Error('Stripe customer is not linked to this account');
   return stripeRequest('/billing_portal/sessions', new URLSearchParams({ customer: customerId, return_url: appUrl() }));
@@ -120,6 +142,13 @@ export function planFromMetadata(metadata: Record<string, string> | undefined): 
   return plan === 'career' || plan === 'pro' || plan === 'concierge' ? plan : 'none';
 }
 
+export function employerPlanFromMetadata(metadata:Record<string,string>|undefined):EmployerSubscriptionPlan{
+  const plan=metadata?.employer_plan;
+  return plan==='starter'||plan==='pro'||plan==='enterprise'?plan:'free';
+}
+
 export function accountIdFromMetadata(metadata: Record<string, string> | undefined) {
   return metadata?.account_id?.trim() || undefined;
 }
+
+export function organizationIdFromMetadata(metadata:Record<string,string>|undefined){return metadata?.organization_id?.trim()||undefined;}
