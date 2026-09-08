@@ -7,7 +7,9 @@ import {
   type EmployerCandidateSource,
   type EmployerCandidateStage,
   type EmployerJob,
-  type EmployerRole
+  type EmployerRole,
+  type EmployerSubscriptionPlan,
+  type EmployerSubscriptionStatus
 } from './employer-platform.js';
 
 /**
@@ -44,12 +46,14 @@ export class DurableEmployerPlatform {
   async addMember(orgId: string, actorAccountId: string, accountId: string, role: Exclude<EmployerRole, 'owner'>) { return this.mutate(working=>working.addMember(orgId, actorAccountId, accountId, role)); }
   async createJob(orgId: string,actorAccountId: string,input: Omit<EmployerJob, 'id' | 'organizationId' | 'createdBy' | 'createdAt' | 'updatedAt'>) { return this.mutate(working=>working.createJob(orgId, actorAccountId, input)); }
   async setCandidateConsent(consent: CandidateSourcingConsent) { return this.mutate(working=>working.setCandidateConsent(consent)); }
+  async setOrganizationSubscription(orgId:string,plan:EmployerSubscriptionPlan,status:EmployerSubscriptionStatus,refs:{customerRef?:string;subscriptionRef?:string;eventCreatedAt?:number}={}) { return this.mutate(working=>working.setOrganizationSubscription(orgId,plan,status,refs)); }
   async addCandidateToPipeline(jobId:string,orgId:string,actorAccountId:string,input:{candidateId:string;source:EmployerCandidateSource;consentBasis:EmployerCandidateConsentBasis;evidenceDigest?:string;notes?:string[]}) { return this.mutate(working=>working.addCandidateToPipeline(jobId,orgId,actorAccountId,input)); }
   async transitionCandidate(recordId:string,orgId:string,actorAccountId:string,stage:EmployerCandidateStage,reason?:string) { return this.mutate(working=>working.transitionCandidate(recordId,orgId,actorAccountId,stage,reason)); }
   async attachPipelineAssessment(recordId:string,orgId:string,actorAccountId:string,assessmentId:string) { return this.mutate(working=>working.attachPipelineAssessment(recordId,orgId,actorAccountId,assessmentId)); }
   async addPipelineNote(recordId:string,orgId:string,actorAccountId:string,note:string) { return this.mutate(working=>working.addPipelineNote(recordId,orgId,actorAccountId,note)); }
 
   organization(orgId: string) { return this.platform.organization(orgId); }
+  organizationAccessTier(orgId:string){return this.platform.organizationAccessTier(orgId);}
   listJobs(orgId: string, actorAccountId: string) { return this.platform.listJobs(orgId, actorAccountId); }
   candidateConsent(candidateId: string) { return this.platform.candidateConsent(candidateId); }
   canOrganizationSourceCandidate(candidateId: string, orgId: string) { return this.platform.canOrganizationSourceCandidate(candidateId, orgId); }
