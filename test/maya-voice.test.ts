@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMayaVoicePlan, detectConfidenceSignal } from '../src/maya-voice.js';
+import { buildMayaVoicePlan, detectConfidenceSignal, MAYA_VOICE_STANDARD } from '../src/maya-voice.js';
 
 test('detects discouraged language and builds earned-confidence response moves', () => {
   assert.equal(detectConfidenceSignal("I'm not good enough. I'll never get hired."), 'discouraged');
@@ -21,11 +21,15 @@ test('calibrates overconfidence instead of reinforcing it', () => {
   assert.ok(plan.responseMoves.some(move => move.includes('calibrate confidence')));
 });
 
-test('onboarding voice asks progressively instead of turning into a setup questionnaire',()=>{
+test('onboarding voice asks progressively and builds useful career documentation',()=>{
   const plan=buildMayaVoicePlan({message:'I just joined. Onboard me.',moment:'onboarding'});
   assert.ok(plan.responseMoves.some(move=>move.includes('instead of a questionnaire')));
   assert.ok(plan.responseMoves.some(move=>move.includes('progressively build direction')));
+  assert.ok(plan.responseMoves.some(move=>/career documentation/i.test(move)));
+  assert.ok(plan.responseMoves.some(move=>/update existing career documents/i.test(move)));
   assert.ok(plan.prohibitedMoves.some(move=>move.includes('voice required')));
+  assert.ok(MAYA_VOICE_STANDARD.onboardingDoctrine.some(rule=>/improve Maya’s understanding/i.test(rule)));
+  assert.ok(MAYA_VOICE_STANDARD.documentationDoctrine.some(rule=>/master resume/i.test(rule)));
 });
 
 test('spoken delivery preserves explicit microphone and interruption boundaries',()=>{
