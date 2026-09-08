@@ -58,12 +58,20 @@ for(const required of ['career-advantage.js','maya-universal-engine-adapter.js',
   if(!service.includes(required)) failures.push(`src/maya-service.ts: missing universal career capability ${required}`);
 }
 const universalAdapter=await readFile(join(src,'maya-universal-engine-adapter.ts'),'utf8');
-for(const required of ['analyzeCompetitiveApplication','competitiveSelection','applicantCount']){
-  if(!universalAdapter.includes(required)) failures.push(`src/maya-universal-engine-adapter.ts: missing dynamic competitive-selection wiring ${required}`);
+for(const required of ['analyzeCompetitiveApplication','competitiveSelection','applicantCount','buildCareerDocumentation','careerDocumentation']){
+  if(!universalAdapter.includes(required)) failures.push(`src/maya-universal-engine-adapter.ts: missing dynamic role/documentation wiring ${required}`);
 }
 const careerOs=await readFile(join(src,'career-os.ts'),'utf8');
 for(const required of ['competitiveSelectionForResume','CompetitiveApplicationAnalysis','applicantCount']){
   if(!careerOs.includes(required)) failures.push(`src/career-os.ts: missing conversational competitive-selection wiring ${required}`);
+}
+const documentation=await readFile(join(src,'career-documentation.ts'),'utf8');
+for(const required of ['master-resume','target-resume','professional-profile','evidence-index','accomplishment-bank','interview-story-bank','gap-plan','sourceFingerprint','CareerDocumentationStore']){
+  if(!documentation.includes(required)) failures.push(`src/career-documentation.ts: missing canonical career documentation capability ${required}`);
+}
+const voice=await readFile(join(src,'maya-voice.ts'),'utf8');
+for(const required of ['documentationDoctrine','master resume','update existing career documents','inventing missing employment history']){
+  if(!voice.includes(required)) failures.push(`src/maya-voice.ts: missing onboarding documentation doctrine ${required}`);
 }
 
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
