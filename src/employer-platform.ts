@@ -17,6 +17,9 @@ import {
 
 export type EmployerRole = 'owner' | 'admin' | 'recruiter' | 'hiring-manager' | 'viewer';
 export type CandidateVisibility = 'private' | 'matched-employers' | 'discoverable';
+export type EmployerCandidateStage = 'sourced'|'contacted'|'screen'|'assessment'|'interview'|'finalist'|'offer'|'hired'|'rejected'|'withdrawn';
+export type EmployerCandidateSource = 'marketplace'|'inbound-application'|'employer-pool'|'external-authorized';
+export type EmployerCandidateConsentBasis = 'candidate-sharing-consent'|'candidate-application'|'employer-lawful-source';
 
 export interface EmployerMember { accountId: string; role: EmployerRole; joinedAt: string; }
 export interface EmployerOrganization { id: string; name: string; createdAt: string; members: EmployerMember[]; }
@@ -51,19 +54,55 @@ export interface CandidateSourcingConsent {
   updatedAt: string;
 }
 
+export interface EmployerCandidateStageEvent {
+  stage: EmployerCandidateStage;
+  at: string;
+  actorAccountId: string;
+  reason?: string;
+}
+
+export interface EmployerCandidatePipelineRecord {
+  id: string;
+  organizationId: string;
+  jobId: string;
+  candidateId: string;
+  source: EmployerCandidateSource;
+  consentBasis: EmployerCandidateConsentBasis;
+  stage: EmployerCandidateStage;
+  stageHistory: EmployerCandidateStageEvent[];
+  evidenceDigest?: string;
+  assessmentIds: string[];
+  notes: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmployerPlatformSnapshot {
   organizations: EmployerOrganization[];
   jobs: EmployerJob[];
   consent: CandidateSourcingConsent[];
+  pipeline?: EmployerCandidatePipelineRecord[];
   fairness: Array<{organizationId:string;events:FairnessAuditEvent[]}>;
 }
 
 const permissions: Record<EmployerRole, Set<string>> = {
-  owner: new Set(['org:manage','members:manage','job:write','candidate:source','candidate:view','analytics:view']),
-  admin: new Set(['members:manage','job:write','candidate:source','candidate:view','analytics:view']),
-  recruiter: new Set(['job:write','candidate:source','candidate:view','analytics:view']),
-  'hiring-manager': new Set(['job:write','candidate:view','analytics:view']),
+  owner: new Set(['org:manage','members:manage','job:write','candidate:source','candidate:view','candidate:write','analytics:view']),
+  admin: new Set(['members:manage','job:write','candidate:source','candidate:view','candidate:write','analytics:view']),
+  recruiter: new Set(['job:write','candidate:source','candidate:view','candidate:write','analytics:view']),
+  'hiring-manager': new Set(['job:write','candidate:view','candidate:write','analytics:view']),
   viewer: new Set(['analytics:view'])
+};
+
+const terminalStages = new Set<EmployerCandidateStage>(['hired','rejected','withdrawn']);
+const allowedTransitions: Record<EmployerCandidateStage, Set<EmployerCandidateStage>> = {
+  sourced:new Set(['contacted','screen','rejected','withdrawn']),
+  contacted:new Set(['screen','rejected','withdrawn']),
+  screen:new Set(['assessment','interview','rejected','withdrawn']),
+  assessment:new Set(['interview','finalist','rejected','withdrawn']),
+  interview:new Set(['assessment','finalist','rejected','withdrawn']),
+  finalist:new Set(['offer','rejected','withdrawn']),
+  offer:new Set(['hired','rejected','withdrawn']),
+  hired:new Set(),rejected:new Set(),withdrawn:new Set()
 };
 
 function requirementsFor(job:EmployerJob):HiringRequirement[]{
@@ -77,18 +116,19 @@ export class EmployerPlatform {
   private readonly organizations = new Map<string, EmployerOrganization>();
   private readonly jobs = new Map<string, EmployerJob>();
   private readonly consent = new Map<string, CandidateSourcingConsent>();
+  private readonly pipeline = new Map<string, EmployerCandidatePipelineRecord>();
   private readonly fairness = new Map<string, FairnessAuditTrail>();
 
   constructor(snapshot?:EmployerPlatformSnapshot){if(snapshot)this.restore(snapshot);}
 
   restore(snapshot:EmployerPlatformSnapshot){
-    this.organizations.clear();this.jobs.clear();this.consent.clear();this.fairness.clear();
+    this.organizations.clear();this.jobs.clear();this.consent.clear();this.pipeline.clear();this.fairness.clear();
     for(const org of snapshot.organizations??[]){this.organizations.set(org.id,structuredClone(org));this.fairness.set(org.id,new FairnessAuditTrail());}
     for(const job of snapshot.jobs??[])this.jobs.set(job.id,structuredClone(job));
     for(const consent of snapshot.consent??[])this.consent.set(consent.candidateId,structuredClone(consent));
+    for(const record of snapshot.pipeline??[])this.pipeline.set(record.id,structuredClone(record));
     for(const entry of snapshot.fairness??[]){
       const trail=this.fairness.get(entry.organizationId)??new FairnessAuditTrail();
-      // Preserve historical timestamps during recovery without exposing mutation publicly.
       const target=(trail as unknown as {events:FairnessAuditEvent[]}).events;
       target.push(...structuredClone(entry.events??[]));
       this.fairness.set(entry.organizationId,trail);
@@ -101,6 +141,7 @@ export class EmployerPlatform {
       organizations:[...this.organizations.values()].map(value=>structuredClone(value)),
       jobs:[...this.jobs.values()].map(value=>structuredClone(value)),
       consent:[...this.consent.values()].map(value=>structuredClone(value)),
+      pipeline:[...this.pipeline.values()].map(value=>structuredClone(value)),
       fairness:[...this.fairness.entries()].map(([organizationId,trail])=>({organizationId,events:trail.list()}))
     };
   }
@@ -162,6 +203,58 @@ export class EmployerPlatform {
     if (consent.blockedOrganizationIds.includes(orgId)) return false;
     if (consent.visibility === 'discoverable') return true;
     return consent.allowedOrganizationIds.includes(orgId);
+  }
+
+  addCandidateToPipeline(jobId:string,orgId:string,actorAccountId:string,input:{candidateId:string;source:EmployerCandidateSource;consentBasis:EmployerCandidateConsentBasis;evidenceDigest?:string;notes?:string[]}){
+    this.assertPermission(orgId,actorAccountId,'candidate:source');
+    const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
+    if(!input.candidateId.trim())throw new Error('candidateId required');
+    if(input.source==='marketplace'&&!this.canOrganizationSourceCandidate(input.candidateId,orgId))throw new Error('candidate marketplace sourcing consent required');
+    if(input.source==='marketplace'&&input.consentBasis!=='candidate-sharing-consent')throw new Error('marketplace candidate requires candidate-sharing-consent basis');
+    if(input.source==='inbound-application'&&input.consentBasis!=='candidate-application')throw new Error('inbound application requires candidate-application consent basis');
+    const existing=[...this.pipeline.values()].find(record=>record.jobId===jobId&&record.candidateId===input.candidateId);
+    if(existing)return structuredClone(existing);
+    const now=new Date().toISOString();
+    const record:EmployerCandidatePipelineRecord={
+      id:id('pipeline_candidate'),organizationId:orgId,jobId,candidateId:input.candidateId,source:input.source,consentBasis:input.consentBasis,stage:'sourced',
+      stageHistory:[{stage:'sourced',at:now,actorAccountId,reason:`Added from ${input.source}`}],evidenceDigest:input.evidenceDigest,assessmentIds:[],notes:[...(input.notes??[])],createdAt:now,updatedAt:now
+    };
+    this.pipeline.set(record.id,record);
+    return structuredClone(record);
+  }
+
+  listPipeline(jobId:string,orgId:string,actorAccountId:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:view');
+    const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
+    return [...this.pipeline.values()].filter(record=>record.jobId===jobId&&record.organizationId===orgId).map(record=>structuredClone(record));
+  }
+
+  transitionCandidate(recordId:string,orgId:string,actorAccountId:string,stage:EmployerCandidateStage,reason?:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:write');
+    const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(record.stage===stage)return structuredClone(record);
+    if(terminalStages.has(record.stage))throw new Error(`pipeline candidate is already terminal: ${record.stage}`);
+    if(!allowedTransitions[record.stage].has(stage))throw new Error(`invalid candidate stage transition: ${record.stage} -> ${stage}`);
+    if(stage==='rejected'&&!reason?.trim())throw new Error('rejection transition requires a reason');
+    const now=new Date().toISOString();
+    record.stage=stage;record.updatedAt=now;record.stageHistory.push({stage,at:now,actorAccountId,reason:reason?.trim()||undefined});
+    this.pipeline.set(record.id,record);
+    return structuredClone(record);
+  }
+
+  attachPipelineAssessment(recordId:string,orgId:string,actorAccountId:string,assessmentId:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:write');
+    const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(!assessmentId.trim())throw new Error('assessmentId required');
+    if(!record.assessmentIds.includes(assessmentId))record.assessmentIds.push(assessmentId);
+    record.updatedAt=new Date().toISOString();this.pipeline.set(record.id,record);return structuredClone(record);
+  }
+
+  addPipelineNote(recordId:string,orgId:string,actorAccountId:string,note:string){
+    this.assertPermission(orgId,actorAccountId,'candidate:write');
+    const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(!note.trim())throw new Error('note required');
+    record.notes.push(note.trim());record.updatedAt=new Date().toISOString();this.pipeline.set(record.id,record);return structuredClone(record);
   }
 
   structuredInterview(jobId:string,orgId:string,actorAccountId:string){
