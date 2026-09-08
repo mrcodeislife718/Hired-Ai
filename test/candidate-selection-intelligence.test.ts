@@ -54,9 +54,9 @@ test('competitive analysis evaluates hiring manager, recruiter and ATS perspecti
 });
 
 test('selection simulation penalizes real missing evidence rather than fabricating fit', () => {
-  const unsupportedCandidate = testCandidate({ skills:[] });
+  const unsupportedCandidate = testCandidate({ headline:'General worker', skills:[] });
   const unsupportedOpportunity = new HiredEngine(unsupportedCandidate,[]).ingest(testJobs()[0]);
-  const map = mapRequirementsToEvidence({ profile:unsupportedCandidate, evidence:[], opportunity:unsupportedOpportunity, resumeText:'General software engineer' });
+  const map = mapRequirementsToEvidence({ profile:unsupportedCandidate, evidence:[], opportunity:unsupportedOpportunity, resumeText:'General worker' });
   const perspectives = [
     { perspective:'hiring-manager' as const, score:20, positives:[], risks:['missing proof'], decisionSignal:'reject-risk' as const },
     { perspective:'senior-recruiter' as const, score:15, positives:[], risks:['missing proof'], decisionSignal:'reject-risk' as const },
