@@ -20,3 +20,17 @@ test('calibrates overconfidence instead of reinforcing it', () => {
   assert.equal(plan.confidenceSignal, 'overconfident');
   assert.ok(plan.responseMoves.some(move => move.includes('calibrate confidence')));
 });
+
+test('onboarding voice asks progressively instead of turning into a setup questionnaire',()=>{
+  const plan=buildMayaVoicePlan({message:'I just joined. Onboard me.',moment:'onboarding'});
+  assert.ok(plan.responseMoves.some(move=>move.includes('instead of a questionnaire')));
+  assert.ok(plan.responseMoves.some(move=>move.includes('progressively build direction')));
+  assert.ok(plan.prohibitedMoves.some(move=>move.includes('voice required')));
+});
+
+test('spoken delivery preserves explicit microphone and interruption boundaries',()=>{
+  const plan=buildMayaVoicePlan({message:'Talk me through my next move',spoken:true});
+  assert.equal(plan.spokenDelivery.enabled,true);
+  assert.match(plan.spokenDelivery.interruptionRule,/stop speaking/i);
+  assert.ok(plan.prohibitedMoves.some(move=>move.includes('activating listening without an explicit user action')));
+});
