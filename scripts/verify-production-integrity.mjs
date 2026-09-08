@@ -66,8 +66,16 @@ for(const required of ['competitiveSelectionForResume','CompetitiveApplicationAn
   if(!careerOs.includes(required)) failures.push(`src/career-os.ts: missing conversational competitive-selection wiring ${required}`);
 }
 const documentation=await readFile(join(src,'career-documentation.ts'),'utf8');
-for(const required of ['master-resume','target-resume','professional-profile','evidence-index','accomplishment-bank','interview-story-bank','gap-plan','sourceFingerprint','CareerDocumentationStore']){
+for(const required of ['master-resume','target-resume','professional-profile','evidence-index','accomplishment-bank','interview-story-bank','gap-plan','sourceFingerprint','CareerDocumentationStore','approved','superseded','resumeDigest']){
   if(!documentation.includes(required)) failures.push(`src/career-documentation.ts: missing canonical career documentation capability ${required}`);
+}
+const engine=await readFile(join(src,'engine.ts'),'utf8');
+for(const required of ['this.careerTwin.current()','careerDocumentation:this.documentation.current()','applicationLineage:this.applicationLineage.state()','refreshDocumentation','applicationLineageId','packageDigest']){
+  if(!engine.includes(required)) failures.push(`src/engine.ts: missing live durable career-document/application wiring ${required}`);
+}
+const lineage=await readFile(join(src,'application-lineage.ts'),'utf8');
+for(const required of ['ApplicationLineageStore','careerTwinVersion','careerDocumentationVersion','packageDigest','outcomeIds','linkOutcome']){
+  if(!lineage.includes(required)) failures.push(`src/application-lineage.ts: missing frozen application lineage capability ${required}`);
 }
 const voice=await readFile(join(src,'maya-voice.ts'),'utf8');
 for(const required of ['documentationDoctrine','master resume','update existing career documents','inventing missing employment history']){
