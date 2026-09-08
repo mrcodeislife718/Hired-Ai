@@ -135,7 +135,7 @@ export class HiredEngine {
     const docs=this.refreshDocumentation();const target=docs.documents.find(document=>document.kind==='target-resume'&&document.targetOpportunityId===opportunityId&&document.status!=='superseded');
     const lineage=this.applicationLineage.freeze({opportunityId,careerTwinVersion:this.careerTwin.current().version,careerDocumentationVersion:docs.version,documentIds:target?[target.id]:[],evidenceIds:p.opportunity.evidenceIds,applicationPackage:p.application});
     const approval=this.governor.requestApproval(opportunityId,'SUBMIT_APPLICATION',{...p.application,readiness:p.readiness,reliability:p.reliability,recommendation:p.recommendation,applicationLineageId:lineage.id,careerTwinVersion:lineage.careerTwinVersion,careerDocumentationVersion:lineage.careerDocumentationVersion,documentIds:lineage.documentIds,evidenceIds:lineage.evidenceIds,packageDigest:lineage.packageDigest} as Record<string,unknown>);
-    return {approval,lineage};
+    return {...approval,lineage};
   }
   applicationHistory(opportunityId?:string){return opportunityId?this.applicationLineage.forOpportunity(opportunityId):this.applicationLineage.all();}
   recordFeedback(event:FeedbackEvent){this.store.addFeedback(event);this.governor.audit('CareerStrategist','FEEDBACK_RECORDED',event.opportunityId,{kind:event.kind});const mapping:Partial<Record<FeedbackEvent['kind'],Parameters<Governor['transition']>[1]>>={REJECTED:'REJECTED',RECRUITER_SCREEN:'RECRUITER_SCREEN',TECHNICAL_PASS:'TECHNICAL',ONSITE:'ONSITE',OFFER:'OFFER'};const next=mapping[event.kind];if(next){const opp=this.requiredOpportunity(event.opportunityId);if(opp.state!==next)this.governor.transition(event.opportunityId,next);}return this.strategist.analyze(this.store.feedback);}
