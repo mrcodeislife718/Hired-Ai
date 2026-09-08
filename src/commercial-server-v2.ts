@@ -7,6 +7,7 @@ import type { ConnectorCapability } from './connector-fabric.js';
 import { DurableEmployerPlatform } from './durable-employer-platform.js';
 import type { EmployerCandidateConsentBasis, EmployerCandidateSource, EmployerCandidateStage, EmployerRole, EmployerSubscriptionPlan } from './employer-platform.js';
 import { baseSecurityHeaders, clearSessionCookie, enforceOrigin, sessionCookie, sessionToken } from './http-security.js';
+import { candidateMayaCapability } from './maya-entitlements.js';
 import { deterministicEmployerMayaReply, type EmployerMayaRequest } from './maya-employer-service.js';
 import { MayaService, type MayaRequest } from './maya-service.js';
 import { MayaResumeStudio, type ResumeAccess, type ResumeTemplateId, type ResumeVariant } from './resume-studio.js';
@@ -173,7 +174,7 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   const orgRead=url.pathname.match(/^\/api\/employer\/organizations\/([^/]+)$/);if(orgRead&&req.method==='GET'){const org=employers.organization(orgRead[1]);if(!org)return sendJson(res,404,{error:'organization not found'});employers.platform.assertPermission(org.id,account.id,'analytics:view');return sendJson(res,200,{organization:org,accessTier:employers.organizationAccessTier(org.id)});}
   const orgCheckout=url.pathname.match(/^\/api\/employer\/organizations\/([^/]+)\/billing\/checkout$/);
   if(orgCheckout&&req.method==='POST'){
-    requireEmployerOwner(orgCheckout[1],account.id,res);if(res.headersSent)return;
+    const ownerOrg=requireEmployerOwner(orgCheckout[1],account.id,res);if(!ownerOrg)return;
     const body=await readJson<{plan?:EmployerSubscriptionPlan}>(req);if(body.plan!=='starter'&&body.plan!=='pro'&&body.plan!=='enterprise')return sendJson(res,400,{error:'employer plan must be starter, pro, or enterprise'});
     const session=await createEmployerCheckoutSession(account,orgCheckout[1],body.plan);if(!session.url)throw new Error('Stripe did not return an employer checkout URL');return sendJson(res,201,{id:session.id,url:session.url});
   }
@@ -214,7 +215,10 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(req.method==='PUT'&&url.pathname==='/api/candidate/sourcing-consent'){const body=await readJson<Record<string,unknown>>(req);return sendJson(res,200,await employers.setCandidateConsent({...body,candidateId:account.profile.id,updatedAt:new Date().toISOString()} as never));}
   if(req.method==='GET'&&url.pathname==='/api/candidate/sourcing-consent')return sendJson(res,200,employers.candidateConsent(account.profile.id)??{candidateId:account.profile.id,visibility:'private',allowedOrganizationIds:[],blockedOrganizationIds:[],shareCompensationTarget:false,shareCareerPreferences:false});
 
-  if(req.method==='POST'&&url.pathname==='/api/maya/chat'){if(!requireCandidateCapability(account,res,'candidate-conversation'))return;const input=await readJson<MayaRequest>(req);const result=await maya.respond(account.id,engine,input);await runtime.checkpoint();return sendJson(res,200,result);}
+  if(req.method==='POST'&&url.pathname==='/api/maya/chat'){
+    const input=await readJson<MayaRequest>(req);const capabilityId=candidateMayaCapability(input);if(!requireCandidateCapability(account,res,capabilityId))return;
+    const result=await maya.respond(account.id,engine,input);await runtime.checkpoint();return sendJson(res,200,{...result,accessTier:candidateAccessTier(account),capabilityId});
+  }
   if(req.method==='GET'&&url.pathname==='/api/maya/history'){const limit=Number(url.searchParams.get('limit')??40);return sendJson(res,200,{messages:await maya.history(account.id,Number.isFinite(limit)?limit:40)});}
   if(req.method==='DELETE'&&url.pathname==='/api/maya/history'){await maya.clearHistory(account.id);return sendJson(res,200,{cleared:true});}
   if(req.method==='GET'&&url.pathname==='/api/maya/attention'){const result=engine.evaluateProactive();await runtime.checkpoint();return sendJson(res,200,{summary:result.summary,signals:result.signals});}
@@ -228,7 +232,9 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(req.method==='POST'&&url.pathname==='/api/github/index'){const body=await readJson<{owner?:string;token?:string}>(req);const owner=String(body.owner??'').trim();if(!owner)return sendJson(res,400,{error:'GitHub owner required'});return sendJson(res,200,await platform.indexGitHubFor(account,owner,typeof body.token==='string'&&body.token.trim()?body.token.trim():undefined));}
   if(req.method==='POST'&&url.pathname==='/api/opportunities'){const result=engine.ingest(await readJson<RawJob>(req));await runtime.checkpoint();return sendJson(res,201,result);}
   const packageMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/package$/);if(packageMatch&&req.method==='GET'){if(!requireCandidateCapability(account,res,'candidate-targeted-docs'))return;return sendJson(res,200,engine.package(packageMatch[1]));}
-  const application=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/application-request$/);if(application&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const result=engine.requestApplication(application[1]);await runtime.checkpoint();return sendJson(res,201,result);}
+  const application=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/application-request$/);if(application&&req.method==='POST'){
+    if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const result=engine.requestApplication(application[1]);engine.applicationLineage.linkApproval(result.lineage.id,result.id);await runtime.checkpoint();return sendJson(res,201,result);
+  }
   const outreach=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/outreach-request$/);if(outreach&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const result=engine.requestOutreach(outreach[1]);await runtime.checkpoint();return sendJson(res,201,result);}
   const transition=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/transition$/);if(transition&&req.method==='POST'){const body=await readJson<{state:PipelineState}>(req);const result=engine.governor.transition(transition[1],body.state);await runtime.checkpoint();return sendJson(res,200,result);}
   const feedback=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/feedback$/);if(feedback&&req.method==='POST'){const body=await readJson<Omit<FeedbackEvent,'opportunityId'>>(req);const result=engine.recordFeedback({...body,opportunityId:feedback[1]});await runtime.checkpoint();return sendJson(res,200,result);}
@@ -238,7 +244,10 @@ async function route(req:IncomingMessage,res:ServerResponse){const url=new URL(r
   if(connectorRetry&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const result=await runtime.retryConnectorOperation(connectorRetry[1]);return sendJson(res,200,{operation:result,confirmedReceived:result.state==='verified-received'});}
   const approve=url.pathname.match(/^\/api\/approvals\/([^/]+)\/approve$/);if(approve&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const result=engine.governor.approve(approve[1]);await runtime.checkpoint();return sendJson(res,200,result);}
   const connectorDispatch=url.pathname.match(/^\/api\/approvals\/([^/]+)\/connector-dispatch$/);
-  if(connectorDispatch&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const body=await readJson<{connectorId?:string;capability?:string;maxAttempts?:number}>(req);const connectorId=String(body.connectorId??'').trim(),capability=String(body.capability??'') as ConnectorCapability;if(!connectorId)return sendJson(res,400,{error:'connectorId required'});if(!CONNECTOR_CAPABILITIES.has(capability))return sendJson(res,400,{error:'supported connector capability required'});const result=await runtime.dispatchApproved(connectorDispatch[1],connectorId,capability,body.maxAttempts);return sendJson(res,200,{operation:result,delivery:{state:engine.governor.deliveryState(connectorDispatch[1]),history:engine.governor.deliveryHistory(connectorDispatch[1])},confirmedReceived:result.state==='verified-received'});}
+  if(connectorDispatch&&req.method==='POST'){
+    if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;const body=await readJson<{connectorId?:string;capability?:string;maxAttempts?:number}>(req);const connectorId=String(body.connectorId??'').trim(),capability=String(body.capability??'') as ConnectorCapability;if(!connectorId)return sendJson(res,400,{error:'connectorId required'});if(!CONNECTOR_CAPABILITIES.has(capability))return sendJson(res,400,{error:'supported connector capability required'});
+    const result=await runtime.dispatchApproved(connectorDispatch[1],connectorId,capability,body.maxAttempts);const approval=engine.store.approvals.get(connectorDispatch[1]);if(result.state==='verified-received'&&approval?.action==='SUBMIT_APPLICATION')engine.applicationLineage.markSubmittedByApproval(approval.id);await runtime.checkpoint();return sendJson(res,200,{operation:result,delivery:{state:engine.governor.deliveryState(connectorDispatch[1]),history:engine.governor.deliveryHistory(connectorDispatch[1])},confirmedReceived:result.state==='verified-received'});
+  }
   const delivery=url.pathname.match(/^\/api\/approvals\/([^/]+)\/delivery$/);if(delivery&&req.method==='GET'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;return sendJson(res,200,{state:engine.governor.deliveryState(delivery[1]),history:engine.governor.deliveryHistory(delivery[1])});}
   const legacyDeliveryMutation=/^\/api\/approvals\/[^/]+\/(provider-acknowledged|verified-received|execute)$/.test(url.pathname);
   if(legacyDeliveryMutation&&req.method==='POST'){if(!requireCandidateCapability(account,res,'candidate-acquisition-orchestration'))return;return sendJson(res,410,{error:'direct delivery-state mutation is disabled; use governed connector-dispatch so provider acknowledgement and verified receipt originate from the connector boundary'});}
