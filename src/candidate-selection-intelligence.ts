@@ -48,8 +48,9 @@ export interface ResumeRewriteSuggestion {
 }
 
 export interface CompetitiveSelectionSimulation {
-  assumedApplicantPool: number;
-  assumedInterviewSlots: number;
+  selectionContextKnown: boolean;
+  assumedApplicantPool?: number;
+  assumedInterviewSlots?: number;
   estimatedInterviewProbability: number;
   estimateBasis: string[];
   likelySelectionReasons: string[];
@@ -220,31 +221,40 @@ export function suggestTruthfulBulletRewrites(resumeText:string, evidence:Eviden
   return suggestions;
 }
 
-function estimatedProbability(perspectives:PerspectiveAssessment[], map:RequirementEvidenceMap[], applicantPool:number, interviewSlots:number) {
+function estimatedProbability(perspectives:PerspectiveAssessment[], map:RequirementEvidenceMap[], applicantPool?:number, interviewSlots?:number) {
   const avg = perspectives.length ? perspectives.reduce((s,p)=>s+p.score,0)/perspectives.length : 0;
   const strongRatio = map.length ? map.filter(m=>m.coverage==='Strong').length/map.length : 0;
   const missingRatio = map.length ? map.filter(m=>m.coverage==='Missing').length/map.length : 0;
   const raw = (avg*.58) + (strongRatio*30) - (missingRatio*24);
+  if(applicantPool===undefined || interviewSlots===undefined) return clamp(raw);
   const slotPressure = Math.max(.25, Math.min(1, (interviewSlots/applicantPool)*12));
   return clamp(raw*slotPressure);
 }
 
 export function simulateCompetitiveSelection(input:{perspectives:PerspectiveAssessment[];map:RequirementEvidenceMap[];applicantPool?:number;interviewSlots?:number}): CompetitiveSelectionSimulation {
-  const applicantPool = Math.max(1,input.applicantPool ?? 200);
-  const interviewSlots = Math.max(1,Math.min(applicantPool,input.interviewSlots ?? 10));
+  const poolKnown=Number.isFinite(input.applicantPool)&&Number(input.applicantPool)>0;
+  const slotsKnown=Number.isFinite(input.interviewSlots)&&Number(input.interviewSlots)>0;
+  const selectionContextKnown=poolKnown&&slotsKnown;
+  const applicantPool=selectionContextKnown?Math.max(1,Math.round(Number(input.applicantPool))):undefined;
+  const interviewSlots=selectionContextKnown?Math.max(1,Math.min(applicantPool!,Math.round(Number(input.interviewSlots)))):undefined;
   const probability = estimatedProbability(input.perspectives,input.map,applicantPool,interviewSlots);
   const strong = input.map.filter(m=>m.coverage==='Strong');
   const hidden = input.map.filter(m=>m.portfolioOnly);
   const missing = input.map.filter(m=>m.coverage==='Missing');
+  const estimateBasis=[
+    'This is a heuristic estimate, not a factual prediction of an employer decision.',
+    selectionContextKnown
+      ? `Known selection context includes approximately ${applicantPool} applicants and ${interviewSlots} interview slots.`
+      : 'Applicant-pool size and interview-slot count are unknown, so the estimate reflects evidence/readiness strength without inventing competitive scarcity.',
+    'It combines evidence coverage, evaluator-perspective scores, and missing requirements.',
+    'It does not assume unsupported candidate claims are true.'
+  ];
   return {
+    selectionContextKnown,
     assumedApplicantPool:applicantPool,
     assumedInterviewSlots:interviewSlots,
     estimatedInterviewProbability:probability,
-    estimateBasis:[
-      'This is a heuristic estimate, not a factual prediction of an employer decision.',
-      'It combines evidence coverage, evaluator-perspective scores, missing requirements, and interview-slot scarcity.',
-      'It does not assume unsupported candidate claims are true.'
-    ],
+    estimateBasis,
     likelySelectionReasons:strong.slice(0,5).map(m=>`${m.requirement} has strong defendable evidence.`),
     likelyRejectionReasons:uniq([
       ...missing.slice(0,5).map(m=>`${m.requirement} is unsupported or missing.`),
