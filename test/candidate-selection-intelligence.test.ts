@@ -32,16 +32,10 @@ test('keyword gap detection distinguishes supported missing terms from unsupport
 });
 
 test('competitive analysis evaluates hiring manager, recruiter and ATS perspectives', () => {
-  const analysis = analyzeCompetitiveApplication({
-    profile:candidate,
-    evidence,
-    opportunity,
-    resumeText:resume,
-    applicantPool:200,
-    interviewSlots:10
-  });
+  const analysis = analyzeCompetitiveApplication({profile:candidate,evidence,opportunity,resumeText:resume,applicantPool:200,interviewSlots:10});
   assert.deepEqual(analysis.perspectives.map(p=>p.perspective),['hiring-manager','senior-recruiter','ats']);
   assert.ok(analysis.perspectives.every(p=>p.score>=0 && p.score<=100));
+  assert.equal(analysis.simulation.selectionContextKnown,true);
   assert.equal(analysis.simulation.assumedApplicantPool,200);
   assert.equal(analysis.simulation.assumedInterviewSlots,10);
   assert.ok(analysis.simulation.estimatedInterviewProbability>=0 && analysis.simulation.estimatedInterviewProbability<=100);
@@ -51,6 +45,15 @@ test('competitive analysis evaluates hiring manager, recruiter and ATS perspecti
   assert.match(analysis.truthRule,/never invent/i);
   assert.ok(analysis.topFiveChanges.length<=5);
   assert.ok(analysis.roleSpecificResumePlan.length>=5);
+});
+
+test('unknown applicant competition remains unknown instead of silently assuming 200 applicants and 10 slots',()=>{
+  const analysis=analyzeCompetitiveApplication({profile:candidate,evidence,opportunity,resumeText:resume});
+  assert.equal(analysis.simulation.selectionContextKnown,false);
+  assert.equal(analysis.simulation.assumedApplicantPool,undefined);
+  assert.equal(analysis.simulation.assumedInterviewSlots,undefined);
+  assert.match(analysis.simulation.estimateBasis.join(' '),/unknown/i);
+  assert.doesNotMatch(analysis.simulation.estimateBasis.join(' '),/200 applicants|10 interview/i);
 });
 
 test('selection simulation penalizes real missing evidence rather than fabricating fit', () => {
