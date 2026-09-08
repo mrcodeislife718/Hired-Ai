@@ -35,16 +35,37 @@ for(const p of await files(src)){
 }
 
 const ui=await readFile(join(src,'web-ui.ts'),'utf8');
-for(const required of ['/api/maya/chat','Message Maya','New conversation','Help me change careers','Help me advance']){
-  if(!ui.includes(required)) failures.push(`src/web-ui.ts: missing conversational requirement ${required}`);
+const requiredUiSignals=[
+  {label:'Maya chat endpoint',patterns:[/\/api\/maya\/chat/]},
+  {label:'conversation composer',patterns:[/Message Maya/i]},
+  {label:'new conversation action',patterns:[/New conversation/i]},
+  {label:'career transition entry point',patterns:[/Help me change careers/i,/career transition plan/i,/change careers/i]},
+  {label:'career advancement entry point',patterns:[/Help me advance/i,/advancement plan/i]},
+  {label:'guided onboarding',patterns:[/guided onboarding/i,/Onboard me conversationally/i]},
+  {label:'explicit voice input control',patterns:[/toggleListening/,/Talk to Maya/i]},
+  {label:'optional spoken replies',patterns:[/toggleVoiceOutput/,/spoken replies/i]},
+  {label:'explicit microphone consent copy',patterns:[/only listens after you press the microphone/i]}
+];
+for(const requirement of requiredUiSignals){
+  if(!requirement.patterns.some(pattern=>pattern.test(ui))) failures.push(`src/web-ui.ts: missing conversational capability ${requirement.label}`);
 }
 for(const forbidden of ['panelGrid','employer-dashboard','career dashboard','dashboard()']){
   if(ui.includes(forbidden)) failures.push(`src/web-ui.ts: non-conversational surface token ${forbidden}`);
 }
+
 const service=await readFile(join(src,'maya-service.ts'),'utf8');
 for(const required of ['career-advantage.js','maya-universal-engine-adapter.js','maya-workflows.js','career-transition','career-advancement','career-reentry']){
   if(!service.includes(required)) failures.push(`src/maya-service.ts: missing universal career capability ${required}`);
 }
+const universalAdapter=await readFile(join(src,'maya-universal-engine-adapter.ts'),'utf8');
+for(const required of ['analyzeCompetitiveApplication','competitiveSelection','applicantCount']){
+  if(!universalAdapter.includes(required)) failures.push(`src/maya-universal-engine-adapter.ts: missing dynamic competitive-selection wiring ${required}`);
+}
+const careerOs=await readFile(join(src,'career-os.ts'),'utf8');
+for(const required of ['competitiveSelectionForResume','CompetitiveApplicationAnalysis','applicantCount']){
+  if(!careerOs.includes(required)) failures.push(`src/career-os.ts: missing conversational competitive-selection wiring ${required}`);
+}
+
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 if(pkg.scripts?.demo) failures.push('package.json: demo script must not ship in production');
 if(!String(pkg.scripts?.check??'').includes('integrity:check')) failures.push('package.json: check must include production integrity gate');
