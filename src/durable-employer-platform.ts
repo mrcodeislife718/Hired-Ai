@@ -9,6 +9,7 @@ import {
   type EmployerCandidateStage,
   type EmployerJob,
   type EmployerOutcomeCheckpoint,
+  type EmployerPlatformSnapshot,
   type EmployerRole,
   type EmployerSubscriptionPlan,
   type EmployerSubscriptionStatus
@@ -20,6 +21,12 @@ export class DurableEmployerPlatform {
   private constructor(platform: EmployerPlatform, private readonly persistence: EmployerPersistenceAdapter) { this.platform = platform; }
   static async create(persistence: EmployerPersistenceAdapter = employerPersistenceFromEnv()) { const snapshot = await persistence.load(); return new DurableEmployerPlatform(new EmployerPlatform(snapshot), persistence); }
   private async mutate<T>(operation:(working:EmployerPlatform)=>T):Promise<T>{let result!:T;const apply=(current:ReturnType<EmployerPlatform['snapshot']>|undefined)=>{const working=new EmployerPlatform(current);result=operation(working);return working.snapshot();};const next=this.persistence.mutate?await this.persistence.mutate(apply):apply(this.platform.snapshot());if(!this.persistence.mutate)await this.persistence.save(next);this.platform.restore(next);return result;}
+  private async mutateSnapshot<T>(operation:(current:EmployerPlatformSnapshot)=>{next:EmployerPlatformSnapshot;result:T}):Promise<T>{
+    let result!:T;
+    const apply=(current:EmployerPlatformSnapshot|undefined)=>{const normalized=new EmployerPlatform(current).snapshot();const changed=operation(normalized);result=changed.result;return changed.next;};
+    const next=this.persistence.mutate?await this.persistence.mutate(apply):apply(this.platform.snapshot());
+    if(!this.persistence.mutate)await this.persistence.save(next);this.platform.restore(next);return result;
+  }
 
   async createOrganization(name:string,ownerAccountId:string){return this.mutate(working=>working.createOrganization(name,ownerAccountId));}
   async addMember(orgId:string,actorAccountId:string,accountId:string,role:Exclude<EmployerRole,'owner'>){return this.mutate(working=>working.addMember(orgId,actorAccountId,accountId,role));}
@@ -34,6 +41,31 @@ export class DurableEmployerPlatform {
   async attachPipelineAssessment(recordId:string,orgId:string,actorAccountId:string,assessmentId:string){return this.mutate(working=>working.attachPipelineAssessment(recordId,orgId,actorAccountId,assessmentId));}
   async addPipelineNote(recordId:string,orgId:string,actorAccountId:string,note:string){return this.mutate(working=>working.addPipelineNote(recordId,orgId,actorAccountId,note));}
   async recordHiringOutcome(recordId:string,orgId:string,actorAccountId:string,input:{checkpoint:EmployerOutcomeCheckpoint;offerAccepted?:boolean;performanceScore?:number;managerSatisfaction?:number;candidateSatisfaction?:number;retentionDays?:number;wouldHireAgain?:boolean;notes?:string;at?:string}){return this.mutate(working=>working.recordHiringOutcome(recordId,orgId,actorAccountId,input));}
+
+  async transferOrganizationOwnership(orgId:string,currentOwnerAccountId:string,newOwnerAccountId:string){
+    if(!newOwnerAccountId.trim()||newOwnerAccountId===currentOwnerAccountId)throw new Error('different new owner account required');
+    return this.mutateSnapshot(snapshot=>{
+      const org=snapshot.organizations.find(item=>item.id===orgId);if(!org)throw new Error('organization not found');
+      const current=org.members.find(member=>member.accountId===currentOwnerAccountId);if(current?.role!=='owner')throw new Error('organization owner required');
+      const nextOwner=org.members.find(member=>member.accountId===newOwnerAccountId);if(!nextOwner)throw new Error('new owner must already be an organization member');
+      current.role='admin';nextOwner.role='owner';return {next:snapshot,result:structuredClone(org)};
+    });
+  }
+
+  async deleteOrganization(orgId:string,ownerAccountId:string){
+    return this.mutateSnapshot(snapshot=>{
+      const index=snapshot.organizations.findIndex(item=>item.id===orgId);if(index<0)throw new Error('organization not found');const org=snapshot.organizations[index];
+      if(org.members.find(member=>member.accountId===ownerAccountId)?.role!=='owner')throw new Error('organization owner required');
+      if(org.subscription.status==='active'||org.subscription.status==='past_due')throw new Error('cancel employer subscription before deleting organization');
+      snapshot.organizations.splice(index,1);snapshot.jobs=snapshot.jobs.filter(job=>job.organizationId!==orgId);snapshot.pipeline=(snapshot.pipeline??[]).filter(record=>record.organizationId!==orgId);snapshot.assessments=(snapshot.assessments??[]).filter(record=>record.organizationId!==orgId);snapshot.outcomes=(snapshot.outcomes??[]).filter(record=>record.organizationId!==orgId);snapshot.fairness=snapshot.fairness.filter(entry=>entry.organizationId!==orgId);
+      snapshot.consent=snapshot.consent.map(consent=>({...consent,allowedOrganizationIds:consent.allowedOrganizationIds.filter(id=>id!==orgId),blockedOrganizationIds:consent.blockedOrganizationIds.filter(id=>id!==orgId)}));
+      return {next:snapshot,result:{deleted:true,organizationId:orgId}};
+    });
+  }
+
+  exportOrganization(orgId:string,actorAccountId:string){
+    this.platform.assertPermission(orgId,actorAccountId,'analytics:view');const snapshot=this.platform.snapshot();const org=snapshot.organizations.find(item=>item.id===orgId);if(!org)throw new Error('organization not found');const jobs=snapshot.jobs.filter(job=>job.organizationId===orgId);const pipeline=(snapshot.pipeline??[]).filter(record=>record.organizationId===orgId).map(record=>record.accessStatus==='consent-withdrawn'?{...record,evidenceDigest:undefined,assessmentIds:[],notes:[]}:record);const visiblePipelineIds=new Set(pipeline.filter(record=>record.accessStatus!=='consent-withdrawn').map(record=>record.id));const assessments=(snapshot.assessments??[]).filter(record=>record.organizationId===orgId&&visiblePipelineIds.has(record.pipelineRecordId));const outcomes=(snapshot.outcomes??[]).filter(record=>record.organizationId===orgId);const fairness=snapshot.fairness.find(entry=>entry.organizationId===orgId)?.events??[];return structuredClone({exportedAt:new Date().toISOString(),organization:org,jobs,pipeline,assessments,outcomes,fairness});
+  }
 
   organization(orgId:string){return this.platform.organization(orgId);}
   organizationAccessTier(orgId:string){return this.platform.organizationAccessTier(orgId);}
