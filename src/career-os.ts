@@ -1,7 +1,9 @@
 import type { CandidateProfile, CareerPresenceProfile, Evidence, Opportunity, RelationshipRecord, RoleReadinessAssessment, SkillGap } from './domain.js';
+import type { CareerTwinSnapshot } from './career-twin.js';
 import { CareerPresenceAgent, CareerDevelopmentAgent, RelationshipIntelligenceAgent, RoleReadinessAgent } from './agents.js';
 import { parseResumeText, planResumeModernization, type ResumeModernizationPlan, type ResumeProfile } from './resume-ingestion.js';
 import { analyzeCompetitiveApplication, type CompetitiveApplicationAnalysis } from './candidate-selection-intelligence.js';
+import { buildCareerDocumentation, type CareerDocument } from './career-documentation.js';
 import { normalize, unique } from './utils.js';
 
 export type PursuitDecision = 'pursue' | 'develop-first' | 'skip';
@@ -37,6 +39,7 @@ export interface NetworkAction {
 
 export interface CareerOperatingPlan {
   resume: ResumeCareerAudit;
+  documentation: CareerDocument[];
   presence: CareerPresenceProfile;
   opportunities: OpportunityDecision[];
   competitiveSelection: CompetitiveApplicationAnalysis[];
@@ -46,6 +49,24 @@ export interface CareerOperatingPlan {
 }
 
 const clean = (values: string[]) => unique(values.map(v => v.trim()).filter(Boolean));
+const at = () => new Date().toISOString();
+
+function careerTwinFallback(profile:CandidateProfile):CareerTwinSnapshot {
+  const fact=<T>(key:string,value:T)=>({key,value,source:'user' as const,confidence:'confirmed' as const,evidenceIds:[],observedAt:at()});
+  return {
+    candidateId:profile.id,version:1,
+    goals:fact('goals',profile.constraints.preferredTitles),
+    strengths:fact('strengths',profile.skills),
+    growthAreas:fact('growthAreas',[]),
+    preferredWork:fact('preferredWork',profile.constraints.allowedWorkModes),
+    dislikedWork:fact('dislikedWork',[]),
+    values:fact('values',[]),
+    compensation:fact('compensation',{minimum:profile.constraints.minBaseSalary}),
+    trajectory:fact('trajectory',{desired:profile.constraints.preferredTitles[0]}),
+    constraints:fact('constraints',clean([...profile.constraints.targetLocations,...profile.constraints.excludedTerms])),
+    facts:[],updatedAt:at()
+  };
+}
 
 export class CareerOperatingSystem {
   private readonly readiness = new RoleReadinessAgent();
@@ -53,7 +74,7 @@ export class CareerOperatingSystem {
   private readonly relationships = new RelationshipIntelligenceAgent();
   private readonly development = new CareerDevelopmentAgent();
 
-  constructor(private readonly profile: CandidateProfile, private readonly evidence: Evidence[]) {}
+  constructor(private readonly profile: CandidateProfile, private readonly evidence: Evidence[], private readonly careerTwin:CareerTwinSnapshot=careerTwinFallback(profile)) {}
 
   auditResume(rawText: string, opportunities: Opportunity[] = []): ResumeCareerAudit {
     const parsed = parseResumeText(rawText);
@@ -164,6 +185,7 @@ export class CareerOperatingSystem {
 
   buildPlan(rawResumeText: string, opportunities: Opportunity[], socialPlatforms: string[] = ['linkedin'], minimumOpportunityScore = 70): CareerOperatingPlan {
     const resume = this.auditResume(rawResumeText, opportunities);
+    const documentation=buildCareerDocumentation({profile:this.profile,careerTwin:this.careerTwin,evidence:this.evidence,opportunities,resumeText:rawResumeText});
     const presence = this.presence.build(this.profile.id, this.evidence, socialPlatforms);
     const decisions = this.selectOpportunities(opportunities, minimumOpportunityScore);
     const competitiveSelection = this.competitiveSelectionForResume(rawResumeText, opportunities);
@@ -186,7 +208,8 @@ export class CareerOperatingSystem {
     if (network.length) nextActions.push('execute the highest-value relationship and career-presence actions instead of relying only on cold applications');
     if (topPursuits.length) nextActions.push(`prepare selective applications for ${topPursuits.map(p => `${p.title} at ${p.company}`).join('; ')}`);
     if (development.actions.length) nextActions.push(`close the highest-impact readiness gap: ${development.actions[0].skill}`);
+    nextActions.push('keep the canonical career documentation portfolio current as verified facts, evidence, goals, and target opportunities change');
     nextActions.push('record interview, rejection, offer, relationship, compensation, and timing outcomes so strategy can be recalibrated from evidence');
-    return { resume, presence, opportunities: decisions, competitiveSelection, network, development, nextActions:clean(nextActions) };
+    return { resume, documentation, presence, opportunities: decisions, competitiveSelection, network, development, nextActions:clean(nextActions) };
   }
 }
