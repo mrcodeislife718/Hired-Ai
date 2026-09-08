@@ -73,6 +73,18 @@ const voice=await readFile(join(src,'maya-voice.ts'),'utf8');
 for(const required of ['documentationDoctrine','master resume','update existing career documents','inventing missing employment history']){
   if(!voice.includes(required)) failures.push(`src/maya-voice.ts: missing onboarding documentation doctrine ${required}`);
 }
+const twoSided=await readFile(join(src,'two-sided-capabilities.ts'),'utf8');
+for(const required of ['candidate-master-docs','employer-role-calibration','employer-basic-pipeline','employer-consented-preview','trustCritical','competitiveDesignControls','ranking-firewall','owned-employer-system']){
+  if(!twoSided.includes(required)) failures.push(`src/two-sided-capabilities.ts: missing two-sided capability architecture ${required}`);
+}
+const employerHiring=await readFile(join(src,'employer-hiring-os.ts'),'utf8');
+for(const required of ['calibrateEmployerRole','buildEmployerHiringPlan','consented','must-have','structured capability interview','human decisions','protected traits']){
+  if(!employerHiring.includes(required)) failures.push(`src/employer-hiring-os.ts: missing employer Hiring OS capability ${required}`);
+}
+const employerMaya=await readFile(join(src,'maya-employer-service.ts'),'utf8');
+for(const required of ['deterministicEmployerMayaReply','employer-welcome','employer-role-calibration','employer-hiring-plan','employer-interview-plan','owned hiring']){
+  if(!employerMaya.includes(required)) failures.push(`src/maya-employer-service.ts: missing conversational employer Maya capability ${required}`);
+}
 
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 if(pkg.scripts?.demo) failures.push('package.json: demo script must not ship in production');
