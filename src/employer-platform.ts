@@ -14,12 +14,14 @@ import {
   type DecisionType,
   type FairnessAuditEvent
 } from './bias-resistant-hiring.js';
+import { evaluateAssessment, type AssessmentDefinition, type AssessmentMode, type AssessmentObservation, type AssessmentResult } from './verified-assessments.js';
 
 export type EmployerRole = 'owner' | 'admin' | 'recruiter' | 'hiring-manager' | 'viewer';
 export type CandidateVisibility = 'private' | 'matched-employers' | 'discoverable';
 export type EmployerCandidateStage = 'sourced'|'contacted'|'screen'|'assessment'|'interview'|'finalist'|'offer'|'hired'|'rejected'|'withdrawn';
 export type EmployerCandidateSource = 'marketplace'|'inbound-application'|'employer-pool'|'external-authorized';
 export type EmployerCandidateConsentBasis = 'candidate-sharing-consent'|'candidate-application'|'employer-lawful-source';
+export type EmployerCandidateAccessStatus = 'active'|'consent-withdrawn';
 export type EmployerSubscriptionPlan = 'free'|'starter'|'pro'|'enterprise';
 export type EmployerSubscriptionStatus = 'inactive'|'active'|'past_due'|'canceled';
 
@@ -79,6 +81,8 @@ export interface EmployerCandidatePipelineRecord {
   candidateId: string;
   source: EmployerCandidateSource;
   consentBasis: EmployerCandidateConsentBasis;
+  accessStatus: EmployerCandidateAccessStatus;
+  accessRevokedAt?: string;
   stage: EmployerCandidateStage;
   stageHistory: EmployerCandidateStageEvent[];
   evidenceDigest?: string;
@@ -88,11 +92,24 @@ export interface EmployerCandidatePipelineRecord {
   updatedAt: string;
 }
 
+export interface EmployerAssessmentRecord {
+  id: string;
+  organizationId: string;
+  jobId: string;
+  pipelineRecordId: string;
+  candidateId: string;
+  definition: AssessmentDefinition;
+  result: AssessmentResult;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface EmployerPlatformSnapshot {
   organizations: EmployerOrganization[];
   jobs: EmployerJob[];
   consent: CandidateSourcingConsent[];
   pipeline?: EmployerCandidatePipelineRecord[];
+  assessments?: EmployerAssessmentRecord[];
   fairness: Array<{organizationId:string;events:FairnessAuditEvent[]}>;
 }
 
@@ -120,6 +137,7 @@ function normalizeOrganization(org:EmployerOrganization):EmployerOrganization{
   const now=new Date().toISOString();
   return {...structuredClone(org),subscription:org.subscription??{plan:'free',status:'inactive',updatedAt:now}};
 }
+function normalizePipelineRecord(record:EmployerCandidatePipelineRecord):EmployerCandidatePipelineRecord{return {...structuredClone(record),accessStatus:record.accessStatus??'active'};}
 
 function requirementsFor(job:EmployerJob):HiringRequirement[]{
   const hard=job.mustHaves.map((label,index)=>({id:`${job.id}:must:${index}`,label,capability:label,type:'skill' as const}));
@@ -133,16 +151,18 @@ export class EmployerPlatform {
   private readonly jobs = new Map<string, EmployerJob>();
   private readonly consent = new Map<string, CandidateSourcingConsent>();
   private readonly pipeline = new Map<string, EmployerCandidatePipelineRecord>();
+  private readonly assessments = new Map<string, EmployerAssessmentRecord>();
   private readonly fairness = new Map<string, FairnessAuditTrail>();
 
   constructor(snapshot?:EmployerPlatformSnapshot){if(snapshot)this.restore(snapshot);}
 
   restore(snapshot:EmployerPlatformSnapshot){
-    this.organizations.clear();this.jobs.clear();this.consent.clear();this.pipeline.clear();this.fairness.clear();
+    this.organizations.clear();this.jobs.clear();this.consent.clear();this.pipeline.clear();this.assessments.clear();this.fairness.clear();
     for(const raw of snapshot.organizations??[]){const org=normalizeOrganization(raw);this.organizations.set(org.id,org);this.fairness.set(org.id,new FairnessAuditTrail());}
     for(const job of snapshot.jobs??[])this.jobs.set(job.id,structuredClone(job));
     for(const consent of snapshot.consent??[])this.consent.set(consent.candidateId,structuredClone(consent));
-    for(const record of snapshot.pipeline??[])this.pipeline.set(record.id,structuredClone(record));
+    for(const record of snapshot.pipeline??[])this.pipeline.set(record.id,normalizePipelineRecord(record));
+    for(const record of snapshot.assessments??[])this.assessments.set(record.id,structuredClone(record));
     for(const entry of snapshot.fairness??[]){
       const trail=this.fairness.get(entry.organizationId)??new FairnessAuditTrail();
       const target=(trail as unknown as {events:FairnessAuditEvent[]}).events;
@@ -158,6 +178,7 @@ export class EmployerPlatform {
       jobs:[...this.jobs.values()].map(value=>structuredClone(value)),
       consent:[...this.consent.values()].map(value=>structuredClone(value)),
       pipeline:[...this.pipeline.values()].map(value=>structuredClone(value)),
+      assessments:[...this.assessments.values()].map(value=>structuredClone(value)),
       fairness:[...this.fairness.entries()].map(([organizationId,trail])=>({organizationId,events:trail.list()}))
     };
   }
@@ -219,6 +240,14 @@ export class EmployerPlatform {
     if (!consent.candidateId) throw new Error('candidateId required');
     const next = { ...structuredClone(consent), updatedAt:new Date().toISOString() };
     this.consent.set(consent.candidateId, next);
+    const revokedAt=next.updatedAt;
+    for(const record of this.pipeline.values()){
+      if(record.candidateId!==next.candidateId||record.source!=='marketplace'||record.accessStatus==='consent-withdrawn')continue;
+      if(this.canOrganizationSourceCandidate(record.candidateId,record.organizationId))continue;
+      record.accessStatus='consent-withdrawn';record.accessRevokedAt=revokedAt;record.updatedAt=revokedAt;
+      if(!terminalStages.has(record.stage)){record.stage='withdrawn';record.stageHistory.push({stage:'withdrawn',at:revokedAt,actorAccountId:'candidate-consent',reason:'Candidate marketplace sourcing consent withdrawn.'});}
+      this.pipeline.set(record.id,record);
+    }
     return structuredClone(next);
   }
 
@@ -239,11 +268,11 @@ export class EmployerPlatform {
     if(input.source==='marketplace'&&!this.canOrganizationSourceCandidate(input.candidateId,orgId))throw new Error('candidate marketplace sourcing consent required');
     if(input.source==='marketplace'&&input.consentBasis!=='candidate-sharing-consent')throw new Error('marketplace candidate requires candidate-sharing-consent basis');
     if(input.source==='inbound-application'&&input.consentBasis!=='candidate-application')throw new Error('inbound application requires candidate-application consent basis');
-    const existing=[...this.pipeline.values()].find(record=>record.jobId===jobId&&record.candidateId===input.candidateId);
+    const existing=[...this.pipeline.values()].find(record=>record.jobId===jobId&&record.candidateId===input.candidateId&&record.accessStatus==='active');
     if(existing)return structuredClone(existing);
     const now=new Date().toISOString();
     const record:EmployerCandidatePipelineRecord={
-      id:id('pipeline_candidate'),organizationId:orgId,jobId,candidateId:input.candidateId,source:input.source,consentBasis:input.consentBasis,stage:'sourced',
+      id:id('pipeline_candidate'),organizationId:orgId,jobId,candidateId:input.candidateId,source:input.source,consentBasis:input.consentBasis,accessStatus:'active',stage:'sourced',
       stageHistory:[{stage:'sourced',at:now,actorAccountId,reason:`Added from ${input.source}`}],evidenceDigest:input.evidenceDigest,assessmentIds:[],notes:[...(input.notes??[])],createdAt:now,updatedAt:now
     };
     this.pipeline.set(record.id,record);
@@ -253,12 +282,15 @@ export class EmployerPlatform {
   listPipeline(jobId:string,orgId:string,actorAccountId:string){
     this.assertPermission(orgId,actorAccountId,'candidate:view');
     const job=this.jobs.get(jobId);if(!job||job.organizationId!==orgId)throw new Error('job not found');
-    return [...this.pipeline.values()].filter(record=>record.jobId===jobId&&record.organizationId===orgId).map(record=>structuredClone(record));
+    return [...this.pipeline.values()].filter(record=>record.jobId===jobId&&record.organizationId===orgId).map(record=>{
+      const copy=structuredClone(record);if(copy.accessStatus==='consent-withdrawn'){copy.evidenceDigest=undefined;copy.assessmentIds=[];copy.notes=[];}return copy;
+    });
   }
 
   transitionCandidate(recordId:string,orgId:string,actorAccountId:string,stage:EmployerCandidateStage,reason?:string){
     this.assertPermission(orgId,actorAccountId,'candidate:write');
     const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(record.accessStatus==='consent-withdrawn')throw new Error('candidate access was withdrawn; active pipeline actions are disabled');
     if(record.stage===stage)return structuredClone(record);
     if(terminalStages.has(record.stage))throw new Error(`pipeline candidate is already terminal: ${record.stage}`);
     if(!allowedTransitions[record.stage].has(stage))throw new Error(`invalid candidate stage transition: ${record.stage} -> ${stage}`);
@@ -269,9 +301,36 @@ export class EmployerPlatform {
     return structuredClone(record);
   }
 
+  governedRejection(recordId:string,orgId:string,actorAccountId:string,input:{reason:string;evidence:CapabilityEvidence[]}){
+    this.assertPermission(orgId,actorAccountId,'candidate:write');
+    const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(record.accessStatus==='consent-withdrawn')throw new Error('candidate access was withdrawn; active pipeline actions are disabled');
+    const job=this.jobs.get(record.jobId);if(!job)throw new Error('job not found');
+    const check=checkRejectionReason(input.reason,requirementsFor(job),input.evidence);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'governed-rejection',evidenceIds:input.evidence.map(item=>item.id),decision:check.valid?'reject':'challenge',rationale:check.valid?input.reason:(check.requiredImprovement??input.reason)});
+    if(!check.valid)throw new Error(`rejection reason failed fairness gate: ${check.requiredImprovement??'job-relevant evidence required'}`);
+    return this.transitionCandidate(recordId,orgId,actorAccountId,'rejected',input.reason);
+  }
+
+  evaluatePipelineAssessment(recordId:string,orgId:string,actorAccountId:string,input:{definition:AssessmentDefinition;observations:AssessmentObservation[];mode?:AssessmentMode}){
+    this.assertPermission(orgId,actorAccountId,'candidate:write');
+    const pipeline=this.pipeline.get(recordId);if(!pipeline||pipeline.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(pipeline.accessStatus==='consent-withdrawn')throw new Error('candidate access was withdrawn; assessments are disabled');
+    const job=this.jobs.get(pipeline.jobId);if(!job)throw new Error('job not found');
+    if(!input.definition.profession.trim())throw new Error('assessment profession required');
+    const result=evaluateAssessment(input.definition,pipeline.candidateId,input.mode??'employer-requested',input.observations);
+    const createdAt=new Date().toISOString();const record:EmployerAssessmentRecord={id:id('assessment_record'),organizationId:orgId,jobId:job.id,pipelineRecordId:pipeline.id,candidateId:pipeline.candidateId,definition:structuredClone(input.definition),result,createdBy:actorAccountId,createdAt};
+    this.assessments.set(record.id,record);if(!pipeline.assessmentIds.includes(record.id))pipeline.assessmentIds.push(record.id);pipeline.updatedAt=createdAt;this.pipeline.set(pipeline.id,pipeline);
+    this.fairness.get(orgId)?.record({actor:actorAccountId,action:'verified-assessment-recorded',evidenceIds:[],decision:result.passed?'advance':undefined,rationale:`Assessment ${input.definition.title} scored ${result.score}/100 with integrity digest ${result.integrityDigest}.`});
+    return structuredClone(record);
+  }
+
+  assessmentRecord(assessmentRecordId:string,orgId:string,actorAccountId:string){this.assertPermission(orgId,actorAccountId,'candidate:view');const record=this.assessments.get(assessmentRecordId);if(!record||record.organizationId!==orgId)throw new Error('assessment record not found');return structuredClone(record);}
+
   attachPipelineAssessment(recordId:string,orgId:string,actorAccountId:string,assessmentId:string){
     this.assertPermission(orgId,actorAccountId,'candidate:write');
     const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(record.accessStatus==='consent-withdrawn')throw new Error('candidate access was withdrawn; assessments are disabled');
     if(!assessmentId.trim())throw new Error('assessmentId required');
     if(!record.assessmentIds.includes(assessmentId))record.assessmentIds.push(assessmentId);
     record.updatedAt=new Date().toISOString();this.pipeline.set(record.id,record);return structuredClone(record);
@@ -280,6 +339,7 @@ export class EmployerPlatform {
   addPipelineNote(recordId:string,orgId:string,actorAccountId:string,note:string){
     this.assertPermission(orgId,actorAccountId,'candidate:write');
     const record=this.pipeline.get(recordId);if(!record||record.organizationId!==orgId)throw new Error('pipeline candidate not found');
+    if(record.accessStatus==='consent-withdrawn')throw new Error('candidate access was withdrawn; notes are disabled');
     if(!note.trim())throw new Error('note required');
     record.notes.push(note.trim());record.updatedAt=new Date().toISOString();this.pipeline.set(record.id,record);return structuredClone(record);
   }
