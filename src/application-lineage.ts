@@ -29,6 +29,7 @@ export class ApplicationLineageStore {
     if(state&&state.candidateId!==candidateId)throw new Error('application lineage candidate mismatch');
     for(const item of state?.applications??[]){
       if(item.candidateId!==candidateId)throw new Error('application lineage restored candidate mismatch');
+      if(item.approvalId&&[...this.applications.values()].some(existing=>existing.approvalId===item.approvalId))throw new Error('duplicate application approval lineage');
       this.applications.set(item.id,clone(item));
     }
   }
@@ -39,14 +40,28 @@ export class ApplicationLineageStore {
     const id=`application_${digest(canonical).slice(0,24)}`;
     const existing=this.applications.get(id);
     if(existing)return clone(existing);
+    if(input.approvalId&&[...this.applications.values()].some(item=>item.approvalId===input.approvalId))throw new Error('approval already linked to an application snapshot');
     const snapshot:ApplicationLineageSnapshot={id,...canonical,outcomeIds:[]};
     this.applications.set(id,snapshot);
     return clone(snapshot);
   }
 
+  linkApproval(id:string,approvalId:string){
+    if(!approvalId.trim())throw new Error('approval id required');
+    const conflict=[...this.applications.values()].find(item=>item.id!==id&&item.approvalId===approvalId);if(conflict)throw new Error('approval already linked to another application snapshot');
+    const item=this.required(id);if(item.approvalId&&item.approvalId!==approvalId)throw new Error('application snapshot already linked to another approval');
+    const next={...item,approvalId};this.applications.set(id,next);return clone(next);
+  }
+
   markSubmitted(id:string,submittedAt=new Date().toISOString()){
     const item=this.required(id);
-    const next={...item,submittedAt};this.applications.set(id,next);return clone(next);
+    if(!item.approvalId)throw new Error('application approval must be linked before submission can be recorded');
+    if(Number.isNaN(Date.parse(submittedAt)))throw new Error('valid submitted timestamp required');
+    const next={...item,submittedAt:item.submittedAt??submittedAt};this.applications.set(id,next);return clone(next);
+  }
+
+  markSubmittedByApproval(approvalId:string,submittedAt=new Date().toISOString()){
+    const item=[...this.applications.values()].find(application=>application.approvalId===approvalId);if(!item)throw new Error('application lineage approval not found');return this.markSubmitted(item.id,submittedAt);
   }
 
   linkOutcome(id:string,outcomeId:string){
@@ -54,6 +69,7 @@ export class ApplicationLineageStore {
     const item=this.required(id);const next={...item,outcomeIds:[...new Set([...item.outcomeIds,outcomeId])]};this.applications.set(id,next);return clone(next);
   }
 
+  latestSubmittedForOpportunity(opportunityId:string){return this.forOpportunity(opportunityId).find(item=>Boolean(item.submittedAt));}
   forOpportunity(opportunityId:string){return clone([...this.applications.values()].filter(item=>item.opportunityId===opportunityId).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)));}
   all(){return clone([...this.applications.values()].sort((a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt)));}
   state():ApplicationLineageState{return {candidateId:this.candidateId,applications:this.all()};}
