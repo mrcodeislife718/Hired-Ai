@@ -14,6 +14,8 @@ export type CareerDocumentKind =
   | 'interview-story-bank'
   | 'gap-plan';
 
+export type CareerDocumentStatus = 'current' | 'needs-input' | 'reviewed' | 'approved' | 'superseded';
+
 export interface CareerDocumentProvenance {
   candidateId: string;
   careerTwinVersion: number;
@@ -28,10 +30,12 @@ export interface CareerDocument {
   kind: CareerDocumentKind;
   title: string;
   version: number;
-  status: 'current' | 'needs-input';
+  status: CareerDocumentStatus;
   targetOpportunityId?: string;
   generatedAt: string;
   updatedAt: string;
+  reviewedAt?: string;
+  approvedAt?: string;
   provenance: CareerDocumentProvenance;
   content: Record<string, unknown>;
   warnings: string[];
@@ -85,14 +89,15 @@ function summaryFor(input:CareerDocumentationBuildInput) {
 }
 
 function provenance(input:CareerDocumentationBuildInput,opportunityIds:string[],sourceResumePresent:boolean,content:unknown):CareerDocumentProvenance {
-  const evidenceIds=clean(input.evidence.map(item=>item.id));
+  const evidenceIds=clean(input.evidence.map(item=>item.id)).sort();
+  const orderedOpportunityIds=clean(opportunityIds).sort();
   return {
     candidateId:input.profile.id,
     careerTwinVersion:input.careerTwin.version,
     evidenceIds,
-    opportunityIds,
+    opportunityIds:orderedOpportunityIds,
     sourceResumePresent,
-    sourceFingerprint:hash({candidateId:input.profile.id,careerTwinVersion:input.careerTwin.version,evidenceIds,opportunityIds,content})
+    sourceFingerprint:hash({candidateId:input.profile.id,careerTwinVersion:input.careerTwin.version,evidenceIds,opportunityIds:orderedOpportunityIds,resumeDigest:hash(String(input.resumeText??'')),content})
   };
 }
 
@@ -201,16 +206,34 @@ export class CareerDocumentationStore {
   rebuild(input:CareerDocumentationBuildInput){
     const generated=buildCareerDocumentation({...input,resumeText:input.resumeText??this.snapshot.latestResumeText});
     const previous=new Map(this.snapshot.documents.map(document=>[document.id,document]));
+    const generatedIds=new Set(generated.map(document=>document.id));
     const documents=generated.map(document=>{
       const old=previous.get(document.id);
       if(!old)return document;
       if(old.provenance.sourceFingerprint===document.provenance.sourceFingerprint)return old;
       return {...document,version:old.version+1,generatedAt:old.generatedAt,updatedAt:now()};
     });
+    for(const old of this.snapshot.documents){
+      if(generatedIds.has(old.id)||old.status==='superseded')continue;
+      documents.push({...old,status:'superseded',updatedAt:now()});
+    }
     this.snapshot={candidateId:this.snapshot.candidateId,version:this.snapshot.version+1,documents,latestResumeText:input.resumeText??this.snapshot.latestResumeText,updatedAt:now()};
     return this.current();
   }
-  stale(input:Omit<CareerDocumentationBuildInput,'resumeText'>){
-    return this.snapshot.documents.filter(document=>document.provenance.careerTwinVersion!==input.careerTwin.version||document.provenance.evidenceIds.length!==input.evidence.length).map(document=>document.id);
+  stale(input:CareerDocumentationBuildInput){
+    const generated=buildCareerDocumentation({...input,resumeText:input.resumeText??this.snapshot.latestResumeText});
+    const expected=new Map(generated.map(document=>[document.id,document.provenance.sourceFingerprint]));
+    return this.snapshot.documents.filter(document=>document.status!=='superseded'&&expected.get(document.id)!==document.provenance.sourceFingerprint).map(document=>document.id);
   }
+  review(documentId:string,at=now()){
+    const document=this.required(documentId);if(document.status==='superseded')throw new Error('cannot review superseded career document');
+    return this.replace(documentId,{...document,status:'reviewed',reviewedAt:at,updatedAt:at});
+  }
+  approve(documentId:string,at=now()){
+    const document=this.required(documentId);if(document.status==='superseded')throw new Error('cannot approve superseded career document');
+    if(document.status==='needs-input')throw new Error('career document needs input before approval');
+    return this.replace(documentId,{...document,status:'approved',reviewedAt:document.reviewedAt??at,approvedAt:at,updatedAt:at});
+  }
+  private required(documentId:string){const document=this.snapshot.documents.find(item=>item.id===documentId);if(!document)throw new Error('career document not found');return document;}
+  private replace(documentId:string,next:CareerDocument){this.snapshot={...this.snapshot,version:this.snapshot.version+1,documents:this.snapshot.documents.map(item=>item.id===documentId?next:item),updatedAt:next.updatedAt};return structuredClone(next);}
 }
