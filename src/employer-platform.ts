@@ -20,9 +20,20 @@ export type CandidateVisibility = 'private' | 'matched-employers' | 'discoverabl
 export type EmployerCandidateStage = 'sourced'|'contacted'|'screen'|'assessment'|'interview'|'finalist'|'offer'|'hired'|'rejected'|'withdrawn';
 export type EmployerCandidateSource = 'marketplace'|'inbound-application'|'employer-pool'|'external-authorized';
 export type EmployerCandidateConsentBasis = 'candidate-sharing-consent'|'candidate-application'|'employer-lawful-source';
+export type EmployerSubscriptionPlan = 'free'|'starter'|'pro'|'enterprise';
+export type EmployerSubscriptionStatus = 'inactive'|'active'|'past_due'|'canceled';
+
+export interface EmployerSubscription {
+  plan: EmployerSubscriptionPlan;
+  status: EmployerSubscriptionStatus;
+  customerRef?: string;
+  subscriptionRef?: string;
+  sourceEventCreatedAt?: number;
+  updatedAt: string;
+}
 
 export interface EmployerMember { accountId: string; role: EmployerRole; joinedAt: string; }
-export interface EmployerOrganization { id: string; name: string; createdAt: string; members: EmployerMember[]; }
+export interface EmployerOrganization { id: string; name: string; createdAt: string; members: EmployerMember[]; subscription: EmployerSubscription; }
 
 export interface EmployerJob {
   id: string;
@@ -105,6 +116,11 @@ const allowedTransitions: Record<EmployerCandidateStage, Set<EmployerCandidateSt
   hired:new Set(),rejected:new Set(),withdrawn:new Set()
 };
 
+function normalizeOrganization(org:EmployerOrganization):EmployerOrganization{
+  const now=new Date().toISOString();
+  return {...structuredClone(org),subscription:org.subscription??{plan:'free',status:'inactive',updatedAt:now}};
+}
+
 function requirementsFor(job:EmployerJob):HiringRequirement[]{
   const hard=job.mustHaves.map((label,index)=>({id:`${job.id}:must:${index}`,label,capability:label,type:'skill' as const}));
   const preferred=job.preferred.map((label,index)=>({id:`${job.id}:preferred:${index}`,label,capability:label,type:'preferred' as const}));
@@ -123,7 +139,7 @@ export class EmployerPlatform {
 
   restore(snapshot:EmployerPlatformSnapshot){
     this.organizations.clear();this.jobs.clear();this.consent.clear();this.pipeline.clear();this.fairness.clear();
-    for(const org of snapshot.organizations??[]){this.organizations.set(org.id,structuredClone(org));this.fairness.set(org.id,new FairnessAuditTrail());}
+    for(const raw of snapshot.organizations??[]){const org=normalizeOrganization(raw);this.organizations.set(org.id,org);this.fairness.set(org.id,new FairnessAuditTrail());}
     for(const job of snapshot.jobs??[])this.jobs.set(job.id,structuredClone(job));
     for(const consent of snapshot.consent??[])this.consent.set(consent.candidateId,structuredClone(consent));
     for(const record of snapshot.pipeline??[])this.pipeline.set(record.id,structuredClone(record));
@@ -149,13 +165,24 @@ export class EmployerPlatform {
   createOrganization(name: string, ownerAccountId: string) {
     if (!name.trim() || !ownerAccountId) throw new Error('organization name and owner required');
     const now = new Date().toISOString();
-    const org: EmployerOrganization = { id:id('org'), name:name.trim(), createdAt:now, members:[{ accountId:ownerAccountId, role:'owner', joinedAt:now }] };
+    const org: EmployerOrganization = { id:id('org'), name:name.trim(), createdAt:now, members:[{ accountId:ownerAccountId, role:'owner', joinedAt:now }],subscription:{plan:'free',status:'inactive',updatedAt:now} };
     this.organizations.set(org.id, org);
     this.fairness.set(org.id,new FairnessAuditTrail());
     return structuredClone(org);
   }
 
   organization(orgId: string) { const org=this.organizations.get(orgId); return org ? structuredClone(org) : undefined; }
+  organizationAccessTier(orgId:string):EmployerSubscriptionPlan{const org=this.organizations.get(orgId);if(!org)throw new Error('organization not found');return org.subscription.status==='active'?org.subscription.plan:'free';}
+
+  setOrganizationSubscription(orgId:string,plan:EmployerSubscriptionPlan,status:EmployerSubscriptionStatus,{customerRef,subscriptionRef,eventCreatedAt}:{customerRef?:string;subscriptionRef?:string;eventCreatedAt?:number}={}){
+    const org=this.organizations.get(orgId);if(!org)throw new Error('organization not found');
+    if(Number.isSafeInteger(eventCreatedAt)&&Number(eventCreatedAt)<Number(org.subscription.sourceEventCreatedAt??0))return structuredClone(org);
+    if(customerRef){const owner=[...this.organizations.values()].find(candidate=>candidate.id!==orgId&&candidate.subscription.customerRef===customerRef);if(owner)throw new Error('Stripe customer is already linked to another employer organization');if(org.subscription.customerRef&&org.subscription.customerRef!==customerRef)throw new Error('Stripe customer does not match this employer organization');}
+    if(org.subscription.subscriptionRef&&subscriptionRef&&org.subscription.subscriptionRef!==subscriptionRef)throw new Error('Stripe subscription does not match this employer organization');
+    const updatedAt=new Date().toISOString();
+    org.subscription={plan,status,customerRef:customerRef??org.subscription.customerRef,subscriptionRef:subscriptionRef??org.subscription.subscriptionRef,sourceEventCreatedAt:Number.isSafeInteger(eventCreatedAt)?eventCreatedAt:org.subscription.sourceEventCreatedAt,updatedAt};
+    this.organizations.set(org.id,org);return structuredClone(org);
+  }
 
   private roleFor(orgId: string, accountId: string) { return this.organizations.get(orgId)?.members.find(member => member.accountId === accountId)?.role; }
   assertPermission(orgId: string, accountId: string, permission: string) {
