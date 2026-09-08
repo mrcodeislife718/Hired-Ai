@@ -1,6 +1,7 @@
 import type { CandidateProfile, CareerPresenceProfile, Evidence, Opportunity, RelationshipRecord, RoleReadinessAssessment, SkillGap } from './domain.js';
 import { CareerPresenceAgent, CareerDevelopmentAgent, RelationshipIntelligenceAgent, RoleReadinessAgent } from './agents.js';
 import { parseResumeText, planResumeModernization, type ResumeModernizationPlan, type ResumeProfile } from './resume-ingestion.js';
+import { analyzeCompetitiveApplication, type CompetitiveApplicationAnalysis } from './candidate-selection-intelligence.js';
 import { normalize, unique } from './utils.js';
 
 export type PursuitDecision = 'pursue' | 'develop-first' | 'skip';
@@ -38,6 +39,7 @@ export interface CareerOperatingPlan {
   resume: ResumeCareerAudit;
   presence: CareerPresenceProfile;
   opportunities: OpportunityDecision[];
+  competitiveSelection: CompetitiveApplicationAnalysis[];
   network: NetworkAction[];
   development: ReturnType<CareerDevelopmentAgent['plan']>;
   nextActions: string[];
@@ -84,6 +86,20 @@ export class CareerOperatingSystem {
         'regenerate targeted resumes from the master record instead of repeatedly editing one stale document'
       ]
     };
+  }
+
+  competitiveSelectionForResume(rawResumeText: string, opportunities: Opportunity[], maxRoles = 3): CompetitiveApplicationAnalysis[] {
+    return opportunities
+      .filter(o => !o.hardRejected)
+      .sort((a,b) => b.score.total - a.score.total)
+      .slice(0, Math.max(1, maxRoles))
+      .map(opportunity => analyzeCompetitiveApplication({
+        profile:this.profile,
+        evidence:this.evidence,
+        opportunity,
+        resumeText:rawResumeText,
+        applicantPool:opportunity.job.applicantCount
+      }));
   }
 
   decideOpportunity(opportunity: Opportunity, minimumOpportunityScore = 70): OpportunityDecision {
@@ -150,6 +166,7 @@ export class CareerOperatingSystem {
     const resume = this.auditResume(rawResumeText, opportunities);
     const presence = this.presence.build(this.profile.id, this.evidence, socialPlatforms);
     const decisions = this.selectOpportunities(opportunities, minimumOpportunityScore);
+    const competitiveSelection = this.competitiveSelectionForResume(rawResumeText, opportunities);
     const network = this.buildNetworkPlan(opportunities, socialPlatforms);
     const recurringGaps: SkillGap[] = opportunities
       .filter(o => !o.hardRejected)
@@ -165,10 +182,11 @@ export class CareerOperatingSystem {
     const topPursuits = decisions.filter(d => d.decision === 'pursue').slice(0,3);
     const nextActions: string[] = [];
     if (resume.parsed.likelyOutdated || resume.verifiedSkillsMissingFromResume.length) nextActions.push('modernize the resume from the current career record and verified evidence before high-value applications');
+    if (competitiveSelection[0]?.topFiveChanges.length) nextActions.push(...competitiveSelection[0].topFiveChanges.slice(0,2));
     if (network.length) nextActions.push('execute the highest-value relationship and career-presence actions instead of relying only on cold applications');
     if (topPursuits.length) nextActions.push(`prepare selective applications for ${topPursuits.map(p => `${p.title} at ${p.company}`).join('; ')}`);
     if (development.actions.length) nextActions.push(`close the highest-impact readiness gap: ${development.actions[0].skill}`);
     nextActions.push('record interview, rejection, offer, relationship, compensation, and timing outcomes so strategy can be recalibrated from evidence');
-    return { resume, presence, opportunities: decisions, network, development, nextActions };
+    return { resume, presence, opportunities: decisions, competitiveSelection, network, development, nextActions:clean(nextActions) };
   }
 }
