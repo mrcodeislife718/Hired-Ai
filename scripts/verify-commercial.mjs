@@ -1,16 +1,12 @@
 const required = [
-  'APP_URL',
-  'DATABASE_URL',
-  'HIRED_COMMERCIAL_CATALOG_JSON',
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'STRIPE_PRICE_CAREER',
-  'STRIPE_PRICE_PRO',
-  'STRIPE_PRICE_CONCIERGE'
+  'APP_URL','DATABASE_URL','HIRED_COMMERCIAL_CATALOG_JSON','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_CAREER','STRIPE_PRICE_PRO','STRIPE_PRICE_CONCIERGE',
+  'STRIPE_EMPLOYER_PRICE_STARTER','STRIPE_EMPLOYER_PRICE_PRO','STRIPE_EMPLOYER_PRICE_ENTERPRISE'
 ];
 
 const planIds=['career','pro','concierge'];
-const optional = ['OPENAI_API_KEY', 'GREENHOUSE_BOARDS', 'LEVER_COMPANIES', 'JOB_JSON_FEEDS', 'HIRED_TELEMETRY_ENDPOINT'];
+const stripePriceKeys=['STRIPE_PRICE_CAREER','STRIPE_PRICE_PRO','STRIPE_PRICE_CONCIERGE','STRIPE_EMPLOYER_PRICE_STARTER','STRIPE_EMPLOYER_PRICE_PRO','STRIPE_EMPLOYER_PRICE_ENTERPRISE'];
+const optional = ['OPENAI_API_KEY','GREENHOUSE_BOARDS','LEVER_COMPANIES','JOB_JSON_FEEDS','HIRED_TELEMETRY_ENDPOINT'];
 const missing = required.filter(key => !process.env[key]?.trim());
 const configuredOptional = optional.filter(key => process.env[key]?.trim());
 const problems = [];
@@ -18,9 +14,7 @@ const problems = [];
 if (process.env.APP_URL && !/^https:\/\//i.test(process.env.APP_URL)) problems.push('APP_URL must use HTTPS for production');
 if (process.env.STRIPE_SECRET_KEY && !/^sk_(test|live)_/.test(process.env.STRIPE_SECRET_KEY)) problems.push('STRIPE_SECRET_KEY does not look like a Stripe secret key');
 if (process.env.STRIPE_WEBHOOK_SECRET && !/^whsec_/.test(process.env.STRIPE_WEBHOOK_SECRET)) problems.push('STRIPE_WEBHOOK_SECRET does not look like a Stripe webhook signing secret');
-for (const key of ['STRIPE_PRICE_CAREER','STRIPE_PRICE_PRO','STRIPE_PRICE_CONCIERGE']) {
-  if (process.env[key] && !/^price_/.test(process.env[key])) problems.push(`${key} does not look like a Stripe Price ID`);
-}
+for (const key of stripePriceKeys) if (process.env[key] && !/^price_/.test(process.env[key])) problems.push(`${key} does not look like a Stripe Price ID`);
 if (process.env.HIRED_TELEMETRY_ENDPOINT && !/^https:\/\//i.test(process.env.HIRED_TELEMETRY_ENDPOINT) && !/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(process.env.HIRED_TELEMETRY_ENDPOINT)) problems.push('HIRED_TELEMETRY_ENDPOINT must use HTTPS outside localhost');
 
 let commercialCatalog=null;
@@ -60,29 +54,32 @@ const sourceConfigured=Boolean(process.env.GREENHOUSE_BOARDS?.trim()||process.en
 const connectorConfigured=connectors.length>0;
 const telemetryConfigured=Boolean(process.env.HIRED_TELEMETRY_ENDPOINT?.trim());
 const pricingConfigured=Boolean(commercialCatalog);
-const coreConfigured=missing.length===0&&problems.length===0&&pricingConfigured;
+const candidateStripeConfigured=['STRIPE_PRICE_CAREER','STRIPE_PRICE_PRO','STRIPE_PRICE_CONCIERGE'].every(key=>Boolean(process.env[key]?.trim()));
+const employerStripeConfigured=['STRIPE_EMPLOYER_PRICE_STARTER','STRIPE_EMPLOYER_PRICE_PRO','STRIPE_EMPLOYER_PRICE_ENTERPRISE'].every(key=>Boolean(process.env[key]?.trim()));
+const coreConfigured=missing.length===0&&problems.length===0&&pricingConfigured&&candidateStripeConfigured&&employerStripeConfigured;
 
 const result = {
   configurationValid: coreConfigured,
   productionCoreConfigured: coreConfigured,
   pricingConfigured,
+  candidateStripeConfigured,
+  employerStripeConfigured,
   acquisitionNetworkConfigured: coreConfigured&&sourceConfigured&&connectorConfigured,
   operationsConfigured: coreConfigured&&telemetryConfigured,
-  missing,
-  problems,
-  configuredOptional,
+  missing,problems,configuredOptional,
   evidenceGates: {
-    pricingConfigured,
-    sourceConfigured,
-    connectorConfigured,
-    telemetryConfigured,
+    pricingConfigured,candidateStripeConfigured,employerStripeConfigured,sourceConfigured,connectorConfigured,telemetryConfigured,
+    requiresCandidateStripeRoundTrip:true,
+    requiresEmployerStripeRoundTrip:true,
     requiresStripeCatalogParityVerification:true,
-    requiresLiveStripeRoundTrip:true,
     requiresDeploymentHealthCheck:true,
     requiresDatabaseRecoveryDrill:true,
-    requiresProviderReceiptVerification:true
+    requiresProviderReceiptVerification:true,
+    requiresEmployerConsentWithdrawalVerification:true,
+    requiresGovernedEmployerAssessmentVerification:true,
+    requiresGovernedRejectionVerification:true
   },
-  note: 'Configuration shape is not production evidence. Launch qualification still requires green CI, deployed health, intentional catalog-to-Stripe price parity, real Stripe test checkout/webhook/cancellation, database backup/restore, telemetry receipt, and a provider-backed governed action with verified receipt.'
+  note: 'Configuration shape is not production evidence. Launch qualification still requires green CI, deployed health, candidate and employer Stripe checkout/webhook/cancellation round trips, database backup/restore, telemetry receipt, a provider-backed governed candidate action with verified receipt, and end-to-end employer consent/assessment/rejection checks.'
 };
 
 console.log(JSON.stringify(result, null, 2));
