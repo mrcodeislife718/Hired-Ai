@@ -85,6 +85,14 @@ const employerMaya=await readFile(join(src,'maya-employer-service.ts'),'utf8');
 for(const required of ['deterministicEmployerMayaReply','employer-welcome','employer-role-calibration','employer-hiring-plan','employer-interview-plan','owned hiring']){
   if(!employerMaya.includes(required)) failures.push(`src/maya-employer-service.ts: missing conversational employer Maya capability ${required}`);
 }
+const employerPlatform=await readFile(join(src,'employer-platform.ts'),'utf8');
+for(const required of ['EmployerCandidatePipelineRecord','addCandidateToPipeline','candidate marketplace sourcing consent required','transitionCandidate','stageHistory','assessmentIds','rejection transition requires a reason']){
+  if(!employerPlatform.includes(required)) failures.push(`src/employer-platform.ts: missing employer-owned pipeline capability ${required}`);
+}
+const durableEmployer=await readFile(join(src,'durable-employer-platform.ts'),'utf8');
+for(const required of ['addCandidateToPipeline','transitionCandidate','attachPipelineAssessment','listPipeline']){
+  if(!durableEmployer.includes(required)) failures.push(`src/durable-employer-platform.ts: missing durable employer pipeline operation ${required}`);
+}
 
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 if(pkg.scripts?.demo) failures.push('package.json: demo script must not ship in production');
