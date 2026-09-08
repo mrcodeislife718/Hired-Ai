@@ -1,5 +1,6 @@
 import type { HiredEngine } from './engine.js';
 import { analyzeCompetitiveApplication } from './candidate-selection-intelligence.js';
+import { buildCareerDocumentation } from './career-documentation.js';
 import { buildMayaUniversalPlan, type MayaUniversalPlanInput } from './maya-universal-orchestrator.js';
 import { toUniversalEvidence, type UniversalEvidence } from './universal-career-intelligence.js';
 
@@ -18,12 +19,20 @@ export function buildUniversalPlanFromEngine(
     evidence,
     opportunity:packaged.opportunity
   });
+  const resumeSource=resumeText?.trim() || JSON.stringify(packaged.resume);
   const competitiveSelection=analyzeCompetitiveApplication({
     profile:engine.profile,
     evidence:legacyEvidence,
     opportunity:packaged.opportunity,
-    resumeText:resumeText?.trim() || JSON.stringify(packaged.resume),
+    resumeText:resumeSource,
     applicantPool:packaged.opportunity.job.applicantCount
   });
-  return {...universal,competitiveSelection};
+  const careerDocumentation=buildCareerDocumentation({
+    profile:engine.profile,
+    careerTwin:engine.careerTwin.current(),
+    evidence:legacyEvidence,
+    opportunities:[...engine.store.opportunities.values()],
+    resumeText:resumeText?.trim() || undefined
+  });
+  return {...universal,competitiveSelection,careerDocumentation};
 }
