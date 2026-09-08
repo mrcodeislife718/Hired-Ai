@@ -3,6 +3,9 @@ import { employerPersistenceFromEnv, type EmployerPersistenceAdapter } from './e
 import {
   EmployerPlatform,
   type CandidateSourcingConsent,
+  type EmployerCandidateConsentBasis,
+  type EmployerCandidateSource,
+  type EmployerCandidateStage,
   type EmployerJob,
   type EmployerRole
 } from './employer-platform.js';
@@ -37,26 +40,20 @@ export class DurableEmployerPlatform {
     return result;
   }
 
-  async createOrganization(name: string, ownerAccountId: string) {
-    return this.mutate(working=>working.createOrganization(name, ownerAccountId));
-  }
-
-  async addMember(orgId: string, actorAccountId: string, accountId: string, role: Exclude<EmployerRole, 'owner'>) {
-    return this.mutate(working=>working.addMember(orgId, actorAccountId, accountId, role));
-  }
-
-  async createJob(orgId: string,actorAccountId: string,input: Omit<EmployerJob, 'id' | 'organizationId' | 'createdBy' | 'createdAt' | 'updatedAt'>) {
-    return this.mutate(working=>working.createJob(orgId, actorAccountId, input));
-  }
-
-  async setCandidateConsent(consent: CandidateSourcingConsent) {
-    return this.mutate(working=>working.setCandidateConsent(consent));
-  }
+  async createOrganization(name: string, ownerAccountId: string) { return this.mutate(working=>working.createOrganization(name, ownerAccountId)); }
+  async addMember(orgId: string, actorAccountId: string, accountId: string, role: Exclude<EmployerRole, 'owner'>) { return this.mutate(working=>working.addMember(orgId, actorAccountId, accountId, role)); }
+  async createJob(orgId: string,actorAccountId: string,input: Omit<EmployerJob, 'id' | 'organizationId' | 'createdBy' | 'createdAt' | 'updatedAt'>) { return this.mutate(working=>working.createJob(orgId, actorAccountId, input)); }
+  async setCandidateConsent(consent: CandidateSourcingConsent) { return this.mutate(working=>working.setCandidateConsent(consent)); }
+  async addCandidateToPipeline(jobId:string,orgId:string,actorAccountId:string,input:{candidateId:string;source:EmployerCandidateSource;consentBasis:EmployerCandidateConsentBasis;evidenceDigest?:string;notes?:string[]}) { return this.mutate(working=>working.addCandidateToPipeline(jobId,orgId,actorAccountId,input)); }
+  async transitionCandidate(recordId:string,orgId:string,actorAccountId:string,stage:EmployerCandidateStage,reason?:string) { return this.mutate(working=>working.transitionCandidate(recordId,orgId,actorAccountId,stage,reason)); }
+  async attachPipelineAssessment(recordId:string,orgId:string,actorAccountId:string,assessmentId:string) { return this.mutate(working=>working.attachPipelineAssessment(recordId,orgId,actorAccountId,assessmentId)); }
+  async addPipelineNote(recordId:string,orgId:string,actorAccountId:string,note:string) { return this.mutate(working=>working.addPipelineNote(recordId,orgId,actorAccountId,note)); }
 
   organization(orgId: string) { return this.platform.organization(orgId); }
   listJobs(orgId: string, actorAccountId: string) { return this.platform.listJobs(orgId, actorAccountId); }
   candidateConsent(candidateId: string) { return this.platform.candidateConsent(candidateId); }
   canOrganizationSourceCandidate(candidateId: string, orgId: string) { return this.platform.canOrganizationSourceCandidate(candidateId, orgId); }
+  listPipeline(jobId:string,orgId:string,actorAccountId:string) { return this.platform.listPipeline(jobId,orgId,actorAccountId); }
   structuredInterview(jobId: string, orgId: string, actorAccountId: string) { return this.platform.structuredInterview(jobId, orgId, actorAccountId); }
   async evidenceSubstitution(jobId: string, requirementId: string, evidence: CapabilityEvidence[], orgId: string, actorAccountId: string) { return this.mutate(working=>working.evidenceSubstitution(jobId, requirementId, evidence, orgId, actorAccountId)); }
   async factInferenceAudit(orgId: string, actorAccountId: string, input: { fact: string; inference: string; evidence: CapabilityEvidence[]; confidence?: number }) { return this.mutate(working=>working.factInferenceAudit(orgId, actorAccountId, input)); }
